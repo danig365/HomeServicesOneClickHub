@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/auth-store';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Lock, Mail, Wifi, WifiOff } from 'lucide-react-native';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const TEAL = '#14B8A6';
 const CREAM = '#FFF8E7';
@@ -27,6 +28,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline' | 'e2b-mobile'>('checking');
   const [backendUrl, setBackendUrl] = useState<string>('');
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const getBaseUrl = () => {
     if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
@@ -137,6 +139,33 @@ export default function LoginScreen() {
     }
   };
 
+  const handleDemoMode = async () => {
+    clearError();
+    setLocalError(null);
+    console.log('[Login] Entering demo mode - bypassing authentication');
+    const demoUser: any = {
+      id: 'demo-user-123',
+      email: 'demo@hudson.com',
+      name: 'Demo User',
+      phone: '555-0100',
+      role: 'homeowner' as const,
+      createdAt: new Date().toISOString(),
+    };
+    const demoToken = 'demo-token-' + Date.now();
+    
+    try {
+      await Promise.all([
+        AsyncStorage.setItem('hudson_auth_token', demoToken),
+        AsyncStorage.setItem('hudson_auth_user', JSON.stringify(demoUser)),
+      ]);
+      console.log('[Login] Demo mode activated, navigating to home');
+      router.replace('/(tabs)/(home)' as any);
+    } catch (err) {
+      console.error('[Login] Failed to set demo mode:', err);
+      setLocalError('Failed to enter demo mode');
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -226,9 +255,9 @@ export default function LoginScreen() {
               </View>
             )}
 
-            {error ? (
+            {(error || localError) ? (
               <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{error}</Text>
+                <Text style={styles.errorText}>{error || localError}</Text>
               </View>
             ) : null}
 
@@ -292,12 +321,22 @@ export default function LoginScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.bypassButton, backendStatus === 'e2b-mobile' && styles.loginButtonDisabled]}
-              onPress={handleBypassLogin}
-              disabled={isLoading || backendStatus === 'e2b-mobile'}
+              style={styles.demoButton}
+              onPress={handleDemoMode}
+              disabled={isLoading}
             >
-              <Text style={styles.bypassButtonText}>🚀 Quick Start with Test Account</Text>
+              <Text style={styles.demoButtonText}>🎮 Demo Mode (No Backend Required)</Text>
             </TouchableOpacity>
+
+            {backendStatus !== 'e2b-mobile' && backendStatus === 'online' && (
+              <TouchableOpacity
+                style={styles.bypassButton}
+                onPress={handleBypassLogin}
+                disabled={isLoading}
+              >
+                <Text style={styles.bypassButtonText}>🚀 Quick Start with Test Account</Text>
+              </TouchableOpacity>
+            )}
 
             <View style={styles.demoContainer}>
               <Text style={styles.demoTitle}>Demo Accounts:</Text>
@@ -516,6 +555,21 @@ const styles = StyleSheet.create({
     borderColor: '#7C3AED',
   },
   bypassButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700' as const,
+  },
+  demoButton: {
+    backgroundColor: '#10B981',
+    height: 56,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#059669',
+  },
+  demoButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '700' as const,
