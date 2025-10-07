@@ -44,11 +44,11 @@ export default function LoginScreen() {
     if (debuggerHost) {
       console.log('[Login] Raw hostUri:', debuggerHost);
       
-      if (debuggerHost.includes('tunnel.dev') || debuggerHost.includes('ngrok') || debuggerHost.includes('.trycloudflare.com')) {
-        return `https://${debuggerHost.split(':')[0]}`;
-      }
+      const host = debuggerHost.split(':')[0];
       
-      const [host, port] = debuggerHost.split(':');
+      if (debuggerHost.includes('tunnel.dev') || debuggerHost.includes('ngrok') || debuggerHost.includes('.trycloudflare.com')) {
+        return `https://${host}`;
+      }
       
       if (host.includes('.e2b.app')) {
         return `https://8081-${host}`;

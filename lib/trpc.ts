@@ -28,13 +28,13 @@ const getBaseUrl = () => {
   if (debuggerHost) {
     console.log('[tRPC] Raw hostUri:', debuggerHost);
     
+    const host = debuggerHost.split(':')[0];
+    
     if (debuggerHost.includes('tunnel.dev') || debuggerHost.includes('ngrok') || debuggerHost.includes('.trycloudflare.com')) {
-      const url = `https://${debuggerHost.split(':')[0]}`;
+      const url = `https://${host}`;
       console.log('[tRPC] Using tunnel URL:', url);
       return url;
     }
-    
-    const [host, port] = debuggerHost.split(':');
     
     if (host.includes('.e2b.app')) {
       const url = `https://8081-${host}`;
