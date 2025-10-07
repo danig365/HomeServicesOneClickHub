@@ -28,10 +28,11 @@ function RootLayoutNav() {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(tabs)' || segments[0] === 'service' || segments[0] === 'cart' || segments[0] === 'checkout' || segments[0] === 'document' || segments[0] === 'properties' || segments[0] === 'blueprint' || segments[0] === 'tech-portal' || segments[0] === 'referral-card' || segments[0] === 'snapshot-inspection' || segments[0] === 'property-reminders' || segments[0] === 'appointment' || segments[0] === 'admin-dashboard';
+    const inPublicRoute = segments[0] === 'login' || segments[0] === 'signup' || segments[0] === 'forgot-password';
 
     if (!isAuthenticated && inAuthGroup) {
       router.replace('/login');
-    } else if (isAuthenticated && !inAuthGroup && segments[0] !== 'login' && segments[0] !== 'signup' && segments[0] !== 'forgot-password') {
+    } else if (isAuthenticated && inPublicRoute) {
       router.replace('/(tabs)/(home)');
     }
   }, [isAuthenticated, segments, isLoading, router]);

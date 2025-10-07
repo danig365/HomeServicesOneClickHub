@@ -16,7 +16,7 @@ const getBaseUrl = () => {
     if (typeof window !== 'undefined') {
       return window.location.origin;
     }
-    return "";
+    return "http://localhost:8081";
   }
 
   const debuggerHost = Constants.expoConfig?.hostUri;
@@ -26,7 +26,7 @@ const getBaseUrl = () => {
   }
 
   return "http://localhost:8081";
-};
+}
 
 export const trpcReactClient = trpc.createClient({
   links: [
