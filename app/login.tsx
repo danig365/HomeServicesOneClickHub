@@ -23,7 +23,7 @@ const DARK_TEAL = '#0F766E';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, error, clearError, isLoading } = useAuth();
+  const { login, error, clearError, isLoading, setDemoMode } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline' | 'e2b-mobile'>('checking');
@@ -154,12 +154,8 @@ export default function LoginScreen() {
     const demoToken = 'demo-token-' + Date.now();
     
     try {
-      await Promise.all([
-        AsyncStorage.setItem('hudson_auth_token', demoToken),
-        AsyncStorage.setItem('hudson_auth_user', JSON.stringify(demoUser)),
-      ]);
-      console.log('[Login] Demo mode activated, navigating to home');
-      router.replace('/(tabs)/(home)' as any);
+      await setDemoMode(demoUser, demoToken);
+      console.log('[Login] Demo mode activated, navigation will happen automatically');
     } catch (err) {
       console.error('[Login] Failed to set demo mode:', err);
       setLocalError('Failed to enter demo mode');

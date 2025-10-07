@@ -236,6 +236,21 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     setError(null);
   }, []);
 
+  const setDemoMode = useCallback(async (demoUser: User, demoToken: string) => {
+    try {
+      await Promise.all([
+        AsyncStorage.setItem(AUTH_TOKEN_KEY, demoToken),
+        AsyncStorage.setItem(AUTH_USER_KEY, JSON.stringify(demoUser)),
+      ]);
+      setToken(demoToken);
+      setUser(demoUser);
+      console.log('[Auth] Demo mode activated');
+    } catch (err) {
+      console.error('[Auth] Failed to set demo mode:', err);
+      throw err;
+    }
+  }, []);
+
   return useMemo(() => ({
     user,
     token,
@@ -250,5 +265,6 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     getAllUsers,
     deleteUser,
     updateUserRole,
-  }), [user, token, isLoading, error, login, signup, logout, resetPassword, clearError, getAllUsers, deleteUser, updateUserRole]);
+    setDemoMode,
+  }), [user, token, isLoading, error, login, signup, logout, resetPassword, clearError, getAllUsers, deleteUser, updateUserRole, setDemoMode]);
 });
