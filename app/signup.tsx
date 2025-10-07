@@ -52,7 +52,9 @@ export default function SignupScreen() {
 
     const success = await signup({ name, email, phone, password });
     if (success) {
-      router.replace('/(tabs)/(home)');
+      setTimeout(() => {
+        router.replace('/(tabs)/(home)');
+      }, 100);
     }
   };
 

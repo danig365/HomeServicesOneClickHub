@@ -42,7 +42,13 @@ export default function ServiceCard({ service, onQuickAdd }: ServiceCardProps) {
       activeOpacity={0.7}
     >
       <View style={styles.imageContainer}>
-        <Image source={{ uri: service.image }} style={styles.image} />
+        {service.image ? (
+          <Image source={{ uri: service.image }} style={styles.image} />
+        ) : (
+          <View style={[styles.image, { justifyContent: 'center', alignItems: 'center' }]}>
+            <IconComponent size={48} color="#CBD5E1" />
+          </View>
+        )}
         
         {service.popular && (
           <LinearGradient

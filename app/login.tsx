@@ -30,7 +30,9 @@ export default function LoginScreen() {
     clearError();
     const success = await login({ email, password });
     if (success) {
-      router.replace('/(tabs)/(home)');
+      setTimeout(() => {
+        router.replace('/(tabs)/(home)');
+      }, 100);
     }
   };
 
