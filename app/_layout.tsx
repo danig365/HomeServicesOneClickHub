@@ -12,7 +12,7 @@ import { TechAppointmentsProvider } from "@/hooks/tech-appointments-store";
 import { SnapshotProvider } from "@/hooks/snapshot-store";
 import { AuthProvider, useAuth } from "@/hooks/auth-store";
 import { ActivityIndicator, View, StyleSheet } from "react-native";
-import { trpc, trpcClient } from "@/lib/trpc";
+import { trpc, trpcReactClient } from "@/lib/trpc";
 
 const TEAL = '#14B8A6';
 const CREAM = '#FFF8E7';
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
 
 export default function RootLayout() {
   return (
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+    <trpc.Provider client={trpcReactClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <AuthProvider>
