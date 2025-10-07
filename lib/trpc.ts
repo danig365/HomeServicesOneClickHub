@@ -27,6 +27,13 @@ const getBaseUrl = () => {
   const debuggerHost = Constants.expoConfig?.hostUri;
   if (debuggerHost) {
     const host = debuggerHost.split(':')[0];
+    
+    if (host.includes('.e2b.app') || host.includes('tunnel')) {
+      const url = `https://${host}`;
+      console.log('[tRPC] Using tunnel/E2B host:', url, 'from hostUri:', debuggerHost);
+      return url;
+    }
+    
     const url = `http://${host}:8081`;
     console.log('[tRPC] Using debugger host:', url, 'from hostUri:', debuggerHost);
     return url;
