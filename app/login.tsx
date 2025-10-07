@@ -147,8 +147,15 @@ export default function LoginScreen() {
                 <Text style={styles.warningText}>
                   Platform: {Platform.OS}
                 </Text>
+                {Platform.OS !== 'web' && (
+                  <Text style={styles.warningText}>
+                    Host URI: {Constants.expoConfig?.hostUri || 'Not available'}
+                  </Text>
+                )}
                 <Text style={styles.warningHint}>
-                  Make sure the backend server is running. The Rork CLI should start it automatically.
+                  {Platform.OS === 'web' 
+                    ? 'Make sure the backend server is running on this machine.'
+                    : 'For mobile: The backend must be accessible from your device. If using a physical device, ensure both are on the same WiFi network.'}
                 </Text>
                 <TouchableOpacity 
                   style={styles.retryButton}
