@@ -131,19 +131,20 @@ export default function SnapshotInspectionScreen() {
   };
 
   const handleOpenCamera = async (roomId?: string, mode: 'photo' | 'video' = 'photo') => {
-    if (!cameraPermission) {
+    console.log('[Camera] Opening camera, current permission:', cameraPermission);
+    
+    if (!cameraPermission?.granted) {
+      console.log('[Camera] Requesting camera permission...');
       const result = await requestCameraPermission();
+      console.log('[Camera] Permission result:', result);
+      
       if (!result?.granted) {
-        Alert.alert('Permission Required', 'Camera permission is required');
+        Alert.alert('Permission Required', 'Camera permission is required to take photos and videos');
         return;
       }
     }
 
-    if (!cameraPermission?.granted) {
-      Alert.alert('Permission Required', 'Camera permission is required');
-      return;
-    }
-
+    console.log('[Camera] Permission granted, opening camera modal');
     setCurrentRoomId(roomId || null);
     setShowCameraModal(true);
   };
