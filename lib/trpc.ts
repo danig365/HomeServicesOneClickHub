@@ -30,15 +30,17 @@ const getBaseUrl = () => {
     
     const host = debuggerHost.split(':')[0];
     
+    if (host.includes('.e2b.app')) {
+      console.warn('[tRPC] ⚠️ E2B environment detected on mobile device');
+      console.warn('[tRPC] E2B backends are not accessible from physical devices');
+      console.warn('[tRPC] The app will only work in the web preview');
+      console.warn('[tRPC] To test on mobile: Deploy your backend or use ngrok/tunnel');
+      return 'http://localhost:8081';
+    }
+    
     if (debuggerHost.includes('tunnel.dev') || debuggerHost.includes('ngrok') || debuggerHost.includes('.trycloudflare.com')) {
       const url = `https://${host}`;
       console.log('[tRPC] Using tunnel URL:', url);
-      return url;
-    }
-    
-    if (host.includes('.e2b.app')) {
-      const url = `https://8081-${host}`;
-      console.log('[tRPC] Using E2B host:', url, 'from hostUri:', debuggerHost);
       return url;
     }
     
