@@ -67,7 +67,19 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       return true;
     } catch (err) {
       console.error('Login error:', err);
-      setError('Invalid email or password');
+      let errorMessage = 'Invalid email or password';
+      
+      if (err instanceof Error) {
+        if (err.message.includes('Network request failed') || err.message.includes('fetch failed')) {
+          errorMessage = 'Unable to connect to server. Please check your internet connection.';
+        } else if (err.message.includes('Invalid credentials')) {
+          errorMessage = 'Invalid email or password';
+        } else if (!err.message.includes('Invalid')) {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(errorMessage);
       setIsLoading(false);
       return false;
     }
@@ -97,7 +109,18 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       return true;
     } catch (err) {
       console.error('Signup error:', err);
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred during signup';
+      let errorMessage = 'An error occurred during signup';
+      
+      if (err instanceof Error) {
+        if (err.message.includes('Network request failed') || err.message.includes('fetch failed')) {
+          errorMessage = 'Unable to connect to server. Please check your internet connection.';
+        } else if (err.message.includes('Email already exists')) {
+          errorMessage = 'This email is already registered. Please login instead.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
       setError(errorMessage);
       setIsLoading(false);
       return false;
