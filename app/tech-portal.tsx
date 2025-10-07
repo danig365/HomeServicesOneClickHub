@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +16,7 @@ type PropertyFilterType = 'all' | 'assigned' | 'unassigned';
 export default function TechPortalScreen() {
   const insets = useSafeAreaInsets();
   const { properties } = useProperties();
-  const { getUpcomingAppointments, getInProgressAppointments, createAppointment, updateAppointmentStatus } = useTechAppointments();
+  const { appointments, getUpcomingAppointments, getInProgressAppointments, createAppointment } = useTechAppointments();
   const { createSnapshot } = useSnapshots();
   const { currentUser, techs, assignTechToProperty, unassignTechFromProperty, getTechsForProperty } = useUser();
   
@@ -30,12 +30,38 @@ export default function TechPortalScreen() {
   const [appointmentType, setAppointmentType] = useState<'standard' | 'snapshot'>('standard');
   const [appointmentDate, setAppointmentDate] = useState('');
   const [showQuickStartModal, setShowQuickStartModal] = useState(false);
+  const [dashboardStats, setDashboardStats] = useState({
+    totalAppointments: 0,
+    completedToday: 0,
+    inProgress: 0,
+    upcoming: 0,
+  });
 
   const isAdmin = currentUser?.role === 'admin';
   const isTech = currentUser?.role === 'tech';
 
   const upcomingAppointments = getUpcomingAppointments(isTech ? currentUser?.id : undefined);
   const inProgressAppointments = getInProgressAppointments(isTech ? currentUser?.id : undefined);
+
+  useEffect(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const completedToday = appointments.filter(apt => {
+      if (apt.status !== 'completed' || !apt.completedAt) return false;
+      const completedDate = new Date(apt.completedAt);
+      return completedDate >= today && completedDate < tomorrow;
+    }).length;
+
+    setDashboardStats({
+      totalAppointments: appointments.length,
+      completedToday,
+      inProgress: inProgressAppointments.length,
+      upcoming: upcomingAppointments.length,
+    });
+  }, [inProgressAppointments.length, upcomingAppointments.length]);
 
   const filteredProperties = useMemo(() => {
     return properties.filter(p => {
@@ -145,14 +171,41 @@ export default function TechPortalScreen() {
       }} />
 
       <View style={styles.header}>
-        <View style={styles.headerIconContainer}>
-          <Icons.Wrench size={28} color="white" />
+        <View style={styles.headerTop}>
+          <View style={styles.headerIconContainer}>
+            <Icons.Wrench size={28} color="white" />
+          </View>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Hudson Tech Portal</Text>
+            <View style={styles.headerBadge}>
+              <Text style={styles.headerBadgeText}>
+                {isAdmin ? 'Admin' : isTech ? 'Technician' : 'View Only'}
+              </Text>
+            </View>
+          </View>
         </View>
-        <Text style={styles.headerTitle}>Hudson Tech Portal</Text>
-        <View style={styles.headerBadge}>
-          <Text style={styles.headerBadgeText}>
-            {isAdmin ? 'Admin' : isTech ? 'Technician' : 'View Only'}
-          </Text>
+
+        <View style={styles.statsGrid}>
+          <View style={styles.statCard}>
+            <Icons.Calendar size={20} color={COLORS.gold} />
+            <Text style={styles.statNumber}>{dashboardStats.upcoming}</Text>
+            <Text style={styles.statLabel}>Upcoming</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Icons.Clock size={20} color="#F59E0B" />
+            <Text style={styles.statNumber}>{dashboardStats.inProgress}</Text>
+            <Text style={styles.statLabel}>In Progress</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Icons.CheckCircle size={20} color="#10B981" />
+            <Text style={styles.statNumber}>{dashboardStats.completedToday}</Text>
+            <Text style={styles.statLabel}>Today</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Icons.Briefcase size={20} color="white" />
+            <Text style={styles.statNumber}>{dashboardStats.totalAppointments}</Text>
+            <Text style={styles.statLabel}>Total</Text>
+          </View>
         </View>
       </View>
 
@@ -580,8 +633,16 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: COLORS.teal,
     padding: 24,
+    gap: 20,
+  },
+  headerTop: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 16,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    gap: 8,
   },
   headerIconContainer: {
     width: 56,
@@ -597,21 +658,45 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800' as const,
     color: 'white',
     letterSpacing: 0.5,
   },
   headerBadge: {
     backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
   },
   headerBadgeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600' as const,
     color: 'white',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    gap: 6,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: '800' as const,
+    color: 'white',
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
   },
   viewToggle: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert, Platform, Image } from 'react-native';
 import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,7 +10,7 @@ import { useProperties } from '@/hooks/properties-store';
 import { useSnapshots } from '@/hooks/snapshot-store';
 import { useSubscription } from '@/hooks/subscription-store';
 import { COLORS } from '@/constants/colors';
-import { RoomInspection } from '@/types/tech-appointment';
+import { RoomInspection, MediaNote } from '@/types/tech-appointment';
 
 const ROOM_TYPES = [
   { value: 'kitchen', label: 'Kitchen', icon: 'ChefHat' },
@@ -59,7 +59,7 @@ export default function SnapshotInspectionScreen() {
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
   const [capturedMedia, setCapturedMedia] = useState<string | null>(null);
   const [isRecordingVideo, setIsRecordingVideo] = useState(false);
-  const cameraRef = React.useRef<any>(null);
+  const cameraRef = useRef<any>(null);
 
   const snapshot = snapshots.find(s => s.id === id);
   const property = snapshot?.propertyId ? properties.find(p => p.id === snapshot.propertyId) : null;
@@ -156,19 +156,26 @@ export default function SnapshotInspectionScreen() {
         quality: 0.8,
       });
 
-      if (photo && currentRoomId && snapshot) {
+      console.log('[Snapshot] Photo captured:', photo);
+
+      if (photo && photo.uri && currentRoomId && snapshot) {
         const room = snapshot.rooms.find(r => r.id === currentRoomId);
         if (room) {
-          const newImage = {
+          const photoUri = String(photo.uri);
+          console.log('[Snapshot] Adding photo to room:', currentRoomId, 'URI:', photoUri);
+          
+          const newImage: MediaNote = {
             id: `img-${Date.now()}`,
             type: 'image' as const,
-            uri: photo.uri,
+            uri: photoUri,
             timestamp: new Date().toISOString(),
           };
+          
           await updateRoomInspection(snapshot.id, currentRoomId, {
             images: [...room.images, newImage],
           });
-          setCapturedMedia(photo.uri);
+          
+          setCapturedMedia(photoUri);
           setTimeout(() => {
             setCapturedMedia(null);
             setShowCameraModal(false);
@@ -191,16 +198,22 @@ export default function SnapshotInspectionScreen() {
         maxDuration: 60,
       });
 
-      if (video && currentRoomId && snapshot) {
+      console.log('[Snapshot] Video recorded:', video);
+
+      if (video && video.uri && currentRoomId && snapshot) {
         const room = snapshot.rooms.find(r => r.id === currentRoomId);
         if (room) {
-          const newVideo = {
+          const videoUri = String(video.uri);
+          console.log('[Snapshot] Adding video to room:', currentRoomId, 'URI:', videoUri);
+          
+          const newVideo: MediaNote = {
             id: `video-${Date.now()}`,
             type: 'image' as const,
-            uri: video.uri,
+            uri: videoUri,
             timestamp: new Date().toISOString(),
             notes: 'Video recording',
           };
+          
           await updateRoomInspection(snapshot.id, currentRoomId, {
             images: [...room.images, newVideo],
           });
@@ -657,14 +670,33 @@ export default function SnapshotInspectionScreen() {
                     <View style={styles.mediaSection}>
                       <Text style={styles.mediaSectionTitle}>Photos & Videos ({selectedRoom.images.length})</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mediaGallery}>
-                        {selectedRoom.images.map((img) => (
-                          <View key={img.id} style={styles.mediaPreviewContainer}>
-                            <Image source={{ uri: img.uri }} style={styles.mediaPreview} />
-                            <Text style={styles.mediaTimestamp}>
-                              {new Date(img.timestamp).toLocaleTimeString()}
-                            </Text>
-                          </View>
-                        ))}
+                        {selectedRoom.images.map((img) => {
+                          const imageUri = typeof img.uri === 'string' ? img.uri : String(img.uri);
+                          const isVideo = img.notes === 'Video recording';
+                          
+                          return (
+                            <View key={img.id} style={styles.mediaPreviewContainer}>
+                              <Image 
+                                source={{ uri: imageUri }} 
+                                style={styles.mediaPreview} 
+                                resizeMode="cover"
+                              />
+                              {isVideo && (
+                                <View style={styles.videoIndicator}>
+                                  <Icons.Video size={16} color="white" />
+                                </View>
+                              )}
+                              {img.notes && !isVideo && (
+                                <View style={styles.mediaNoteBadge}>
+                                  <Icons.FileText size={12} color="white" />
+                                </View>
+                              )}
+                              <Text style={styles.mediaTimestamp}>
+                                {new Date(img.timestamp).toLocaleTimeString()}
+                              </Text>
+                            </View>
+                          );
+                        })}
                       </ScrollView>
                     </View>
                   )}
@@ -861,7 +893,11 @@ export default function SnapshotInspectionScreen() {
         <View style={styles.cameraContainer}>
           {capturedMedia ? (
             <View style={styles.capturePreview}>
-              <Image source={{ uri: capturedMedia }} style={styles.capturePreviewImage} />
+              <Image 
+                source={{ uri: typeof capturedMedia === 'string' ? capturedMedia : String(capturedMedia) }} 
+                style={styles.capturePreviewImage} 
+                resizeMode="cover"
+              />
               <View style={styles.captureOverlay}>
                 <Icons.CheckCircle size={64} color="#10B981" />
                 <Text style={styles.captureSuccessText}>Captured!</Text>
@@ -1540,5 +1576,27 @@ const styles = StyleSheet.create({
   audioNoteTime: {
     fontSize: 12,
     color: '#6B7280',
+  },
+  mediaNoteBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(245, 158, 11, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
