@@ -28,10 +28,11 @@ function RootLayoutNav() {
     if (isLoading) return;
 
     const inPublicRoute = segments[0] === 'login' || segments[0] === 'signup' || segments[0] === 'forgot-password';
+    const inTechPortal = segments[0] === 'tech-portal';
 
     if (!isAuthenticated && !inPublicRoute) {
       router.replace('/login');
-    } else if (isAuthenticated && inPublicRoute) {
+    } else if (isAuthenticated && inPublicRoute && !inTechPortal) {
       router.replace('/(tabs)/(home)');
     }
   }, [isAuthenticated, segments, isLoading, router]);
