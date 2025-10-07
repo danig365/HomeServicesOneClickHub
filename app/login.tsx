@@ -118,6 +118,17 @@ export default function LoginScreen() {
     }
   };
 
+  const handleBypassLogin = async () => {
+    clearError();
+    console.log('[Login] Bypassing enrollment with test account');
+    setEmail('homeowner@hudson.com');
+    setPassword('home123');
+    const success = await login({ email: 'homeowner@hudson.com', password: 'home123' });
+    if (success) {
+      console.log('[Login] Bypass login successful');
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -252,6 +263,14 @@ export default function LoginScreen() {
                 <Text style={styles.signupLink}>Sign Up</Text>
               </TouchableOpacity>
             </View>
+
+            <TouchableOpacity
+              style={styles.bypassButton}
+              onPress={handleBypassLogin}
+              disabled={isLoading}
+            >
+              <Text style={styles.bypassButtonText}>🚀 Quick Start with Test Account</Text>
+            </TouchableOpacity>
 
             <View style={styles.demoContainer}>
               <Text style={styles.demoTitle}>Demo Accounts:</Text>
@@ -458,5 +477,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     marginBottom: 4,
+  },
+  bypassButton: {
+    backgroundColor: '#8B5CF6',
+    height: 56,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#7C3AED',
+  },
+  bypassButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700' as const,
   },
 });
