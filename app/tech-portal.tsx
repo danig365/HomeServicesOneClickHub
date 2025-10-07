@@ -231,13 +231,20 @@ export default function TechPortalScreen() {
       </View>
 
       {(isTech || isAdmin) && (
-        <View style={styles.quickStartContainer}>
+        <View style={styles.quickActionsContainer}>
           <TouchableOpacity
             style={styles.quickStartButton}
             onPress={() => setShowQuickStartModal(true)}
           >
             <Icons.Zap size={24} color="white" />
             <Text style={styles.quickStartText}>QuickStart Snapshot</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.propertiesViewButton}
+            onPress={() => router.push('/tech-properties-view' as any)}
+          >
+            <Icons.Building2 size={24} color={COLORS.teal} />
+            <Text style={styles.propertiesViewText}>Properties View</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1092,9 +1099,10 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     color: 'white',
   },
-  quickStartContainer: {
+  quickActionsContainer: {
     paddingHorizontal: 16,
     marginBottom: 12,
+    gap: 10,
   },
   quickStartButton: {
     flexDirection: 'row',
@@ -1115,6 +1123,28 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700' as const,
     color: 'white',
+  },
+  propertiesViewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: 'white',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: COLORS.teal,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  propertiesViewText: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: COLORS.teal,
   },
   quickStartModalHeader: {
     flexDirection: 'row',
