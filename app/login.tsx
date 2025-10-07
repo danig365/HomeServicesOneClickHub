@@ -51,7 +51,7 @@ export default function LoginScreen() {
       const [host, port] = debuggerHost.split(':');
       
       if (host.includes('.e2b.app')) {
-        return `https://${port}-${host}`;
+        return `https://8081-${host}`;
       }
       
       return `http://${host}:8081`;

@@ -37,7 +37,7 @@ const getBaseUrl = () => {
     const [host, port] = debuggerHost.split(':');
     
     if (host.includes('.e2b.app')) {
-      const url = `https://${port}-${host}`;
+      const url = `https://8081-${host}`;
       console.log('[tRPC] Using E2B host:', url, 'from hostUri:', debuggerHost);
       return url;
     }
