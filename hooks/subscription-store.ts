@@ -137,8 +137,16 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   }, [subscriptions, saveSubscriptions]);
 
   const updateBlueprint = useCallback(async (propertyId: string, blueprint: MyHomeBlueprint) => {
+    console.log('[SubscriptionStore] Updating blueprint for property:', propertyId);
+    console.log('[SubscriptionStore] Current subscriptions:', Object.keys(subscriptions));
+    
     const subscription = subscriptions[propertyId];
-    if (!subscription) return;
+    if (!subscription) {
+      console.error('[SubscriptionStore] No subscription found for property:', propertyId);
+      return;
+    }
+    
+    console.log('[SubscriptionStore] Found subscription, updating blueprint');
     
     const updated = {
       ...subscriptions,
@@ -148,7 +156,9 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       },
     };
     
+    console.log('[SubscriptionStore] Saving updated subscriptions');
     await saveSubscriptions(updated);
+    console.log('[SubscriptionStore] Blueprint saved successfully');
   }, [subscriptions, saveSubscriptions]);
 
   const addCustomProject = useCallback(async (propertyId: string, project: CustomProject) => {

@@ -133,8 +133,17 @@ export default function SnapshotInspectionScreen() {
   const handleOpenCamera = async (roomId?: string, mode: 'photo' | 'video' = 'photo') => {
     console.log('[Camera] Opening camera, current permission:', cameraPermission);
     
-    if (!cameraPermission?.granted) {
-      console.log('[Camera] Requesting camera permission...');
+    if (!cameraPermission) {
+      console.log('[Camera] Permission object is null, requesting...');
+      const result = await requestCameraPermission();
+      console.log('[Camera] Permission result:', result);
+      
+      if (!result?.granted) {
+        Alert.alert('Permission Required', 'Camera permission is required to take photos and videos');
+        return;
+      }
+    } else if (!cameraPermission.granted) {
+      console.log('[Camera] Permission not granted, requesting...');
       const result = await requestCameraPermission();
       console.log('[Camera] Permission result:', result);
       
@@ -904,53 +913,68 @@ export default function SnapshotInspectionScreen() {
                 <Text style={styles.captureSuccessText}>Captured!</Text>
               </View>
             </View>
-          ) : (
-            <>
-              <CameraView
-                ref={cameraRef}
-                style={styles.camera}
-                facing={cameraFacing}
-              >
-                <View style={styles.cameraOverlay}>
-                  <View style={styles.cameraHeader}>
-                    <TouchableOpacity
-                      style={styles.cameraCloseButton}
-                      onPress={() => setShowCameraModal(false)}
-                    >
-                      <Icons.X size={28} color="white" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.cameraFlipButton}
-                      onPress={() => setCameraFacing(current => current === 'back' ? 'front' : 'back')}
-                    >
-                      <Icons.RefreshCw size={28} color="white" />
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.cameraControls}>
-                    <TouchableOpacity
-                      style={styles.captureButton}
-                      onPress={handleTakePhoto}
-                    >
-                      <View style={styles.captureButtonInner} />
-                    </TouchableOpacity>
-                    
-                    {Platform.OS !== 'web' && (
-                      <TouchableOpacity
-                        style={[styles.videoButton, isRecordingVideo && styles.videoButtonRecording]}
-                        onPress={isRecordingVideo ? handleStopVideoRecording : handleStartVideoRecording}
-                      >
-                        {isRecordingVideo ? (
-                          <Icons.Square size={24} color="white" />
-                        ) : (
-                          <Icons.Video size={24} color="white" />
-                        )}
-                      </TouchableOpacity>
-                    )}
-                  </View>
+          ) : cameraPermission?.granted ? (
+            <CameraView
+              ref={cameraRef}
+              style={styles.camera}
+              facing={cameraFacing}
+            >
+              <View style={styles.cameraOverlay}>
+                <View style={styles.cameraHeader}>
+                  <TouchableOpacity
+                    style={styles.cameraCloseButton}
+                    onPress={() => setShowCameraModal(false)}
+                  >
+                    <Icons.X size={28} color="white" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.cameraFlipButton}
+                    onPress={() => setCameraFacing(current => current === 'back' ? 'front' : 'back')}
+                  >
+                    <Icons.RefreshCw size={28} color="white" />
+                  </TouchableOpacity>
                 </View>
-              </CameraView>
-            </>
+
+                <View style={styles.cameraControls}>
+                  <TouchableOpacity
+                    style={styles.captureButton}
+                    onPress={handleTakePhoto}
+                  >
+                    <View style={styles.captureButtonInner} />
+                  </TouchableOpacity>
+                  
+                  {Platform.OS !== 'web' && (
+                    <TouchableOpacity
+                      style={[styles.videoButton, isRecordingVideo && styles.videoButtonRecording]}
+                      onPress={isRecordingVideo ? handleStopVideoRecording : handleStartVideoRecording}
+                    >
+                      {isRecordingVideo ? (
+                        <Icons.Square size={24} color="white" />
+                      ) : (
+                        <Icons.Video size={24} color="white" />
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            </CameraView>
+          ) : (
+            <View style={styles.cameraPermissionContainer}>
+              <Icons.Camera size={64} color="#9CA3AF" />
+              <Text style={styles.cameraPermissionText}>Camera permission required</Text>
+              <TouchableOpacity
+                style={styles.cameraPermissionButton}
+                onPress={async () => {
+                  const result = await requestCameraPermission();
+                  if (!result?.granted) {
+                    setShowCameraModal(false);
+                    Alert.alert('Permission Denied', 'Camera permission is required to take photos');
+                  }
+                }}
+              >
+                <Text style={styles.cameraPermissionButtonText}>Grant Permission</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       </Modal>
@@ -1599,5 +1623,29 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(239, 68, 68, 0.9)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  cameraPermissionContainer: {
+    flex: 1,
+    backgroundColor: 'black',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+    padding: 40,
+  },
+  cameraPermissionText: {
+    fontSize: 18,
+    color: 'white',
+    textAlign: 'center',
+  },
+  cameraPermissionButton: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  cameraPermissionButtonText: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: 'white',
   },
 });

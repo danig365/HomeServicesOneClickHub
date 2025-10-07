@@ -52,6 +52,9 @@ export default function BlueprintScreen() {
       return;
     }
 
+    console.log('[Blueprint] Creating blueprint for property:', property.id);
+    console.log('[Blueprint] Form data:', formData);
+
     const blueprint: MyHomeBlueprint = {
       id: `blueprint-${Date.now()}`,
       propertyId: property.id,
@@ -65,17 +68,28 @@ export default function BlueprintScreen() {
       timeline: formData.timeline,
     };
 
-    await updateBlueprint(property.id, blueprint);
-    
-    Alert.alert(
-      'Blueprint Created!',
-      'Your MyHome Blueprint has been saved.',
-      [{ text: 'Done', onPress: () => setMode('view') }]
-    );
+    console.log('[Blueprint] Blueprint object:', blueprint);
+
+    try {
+      await updateBlueprint(property.id, blueprint);
+      console.log('[Blueprint] Blueprint saved successfully');
+      
+      Alert.alert(
+        'Blueprint Created!',
+        'Your MyHome Blueprint has been saved.',
+        [{ text: 'Done', onPress: () => setMode('view') }]
+      );
+    } catch (error) {
+      console.error('[Blueprint] Failed to save blueprint:', error);
+      Alert.alert('Error', 'Failed to save blueprint. Please try again.');
+    }
   };
 
   const handleUpdateBlueprint = async () => {
     if (!property || !existingBlueprint) return;
+
+    console.log('[Blueprint] Updating blueprint for property:', property.id);
+    console.log('[Blueprint] Form data:', formData);
 
     const updatedBlueprint: MyHomeBlueprint = {
       ...existingBlueprint,
@@ -86,9 +100,17 @@ export default function BlueprintScreen() {
       updatedAt: new Date().toISOString(),
     };
 
-    await updateBlueprint(property.id, updatedBlueprint);
-    Alert.alert('Success', 'Blueprint updated successfully');
-    setMode('view');
+    console.log('[Blueprint] Updated blueprint object:', updatedBlueprint);
+
+    try {
+      await updateBlueprint(property.id, updatedBlueprint);
+      console.log('[Blueprint] Blueprint updated successfully');
+      Alert.alert('Success', 'Blueprint updated successfully');
+      setMode('view');
+    } catch (error) {
+      console.error('[Blueprint] Failed to update blueprint:', error);
+      Alert.alert('Error', 'Failed to update blueprint. Please try again.');
+    }
   };
 
   const handleAddProject = async () => {
