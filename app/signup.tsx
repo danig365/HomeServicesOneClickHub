@@ -50,12 +50,7 @@ export default function SignupScreen() {
       return;
     }
 
-    const success = await signup({ name, email, phone, password });
-    if (success) {
-      setTimeout(() => {
-        router.replace('/(tabs)/(home)');
-      }, 100);
-    }
+    await signup({ name, email, phone, password });
   };
 
   const displayError = error || localError;

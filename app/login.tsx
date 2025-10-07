@@ -14,7 +14,6 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/auth-store';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Lock, Mail } from 'lucide-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const TEAL = '#14B8A6';
 const CREAM = '#FFF8E7';
@@ -28,12 +27,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     clearError();
-    const success = await login({ email, password });
-    if (success) {
-      setTimeout(() => {
-        router.replace('/(tabs)/(home)');
-      }, 100);
-    }
+    await login({ email, password });
   };
 
   return (
