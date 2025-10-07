@@ -26,17 +26,19 @@ const getBaseUrl = () => {
 
   const debuggerHost = Constants.expoConfig?.hostUri;
   if (debuggerHost) {
+    console.log('[tRPC] Raw hostUri:', debuggerHost);
+    
+    if (debuggerHost.includes('tunnel.dev') || debuggerHost.includes('ngrok') || debuggerHost.includes('.trycloudflare.com')) {
+      const url = `https://${debuggerHost.split(':')[0]}`;
+      console.log('[tRPC] Using tunnel URL:', url);
+      return url;
+    }
+    
     const [host, port] = debuggerHost.split(':');
     
     if (host.includes('.e2b.app')) {
       const url = `https://${port}-${host}`;
       console.log('[tRPC] Using E2B host:', url, 'from hostUri:', debuggerHost);
-      return url;
-    }
-    
-    if (host.includes('tunnel')) {
-      const url = `https://${host}`;
-      console.log('[tRPC] Using tunnel host:', url, 'from hostUri:', debuggerHost);
       return url;
     }
     

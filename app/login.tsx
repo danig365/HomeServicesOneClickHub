@@ -42,14 +42,16 @@ export default function LoginScreen() {
 
     const debuggerHost = Constants.expoConfig?.hostUri;
     if (debuggerHost) {
+      console.log('[Login] Raw hostUri:', debuggerHost);
+      
+      if (debuggerHost.includes('tunnel.dev') || debuggerHost.includes('ngrok') || debuggerHost.includes('.trycloudflare.com')) {
+        return `https://${debuggerHost.split(':')[0]}`;
+      }
+      
       const [host, port] = debuggerHost.split(':');
       
       if (host.includes('.e2b.app')) {
         return `https://${port}-${host}`;
-      }
-      
-      if (host.includes('tunnel')) {
-        return `https://${host}`;
       }
       
       return `http://${host}:8081`;
