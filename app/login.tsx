@@ -55,13 +55,18 @@ export default function LoginScreen() {
     console.log('[Login] Checking backend connection at:', baseUrl);
     
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
       const response = await fetch(`${baseUrl}/api`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
         },
+        signal: controller.signal,
       });
       
+      clearTimeout(timeoutId);
       console.log('[Login] Backend response status:', response.status);
       
       if (response.ok) {
@@ -74,6 +79,10 @@ export default function LoginScreen() {
       }
     } catch (err) {
       console.error('[Login] Backend connection failed:', err);
+      if (err instanceof Error) {
+        console.error('[Login] Error name:', err.name);
+        console.error('[Login] Error message:', err.message);
+      }
       setBackendStatus('offline');
     }
   }, []);
@@ -131,8 +140,15 @@ export default function LoginScreen() {
 
             {backendStatus === 'offline' && (
               <View style={styles.warningContainer}>
+                <Text style={styles.warningTitle}>Backend Server Offline</Text>
                 <Text style={styles.warningText}>
-                  Cannot connect to backend server at {backendUrl}
+                  Cannot connect to: {backendUrl}/api
+                </Text>
+                <Text style={styles.warningText}>
+                  Platform: {Platform.OS}
+                </Text>
+                <Text style={styles.warningHint}>
+                  Make sure the backend server is running. The Rork CLI should start it automatically.
                 </Text>
                 <TouchableOpacity 
                   style={styles.retryButton}
@@ -307,10 +323,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 16,
   },
+  warningTitle: {
+    color: '#92400E',
+    fontSize: 14,
+    fontWeight: '700' as const,
+    marginBottom: 8,
+  },
   warningText: {
     color: '#92400E',
-    fontSize: 12,
+    fontSize: 11,
+    marginBottom: 4,
+  },
+  warningHint: {
+    color: '#92400E',
+    fontSize: 10,
+    marginTop: 8,
     marginBottom: 8,
+    fontStyle: 'italic' as const,
   },
   retryButton: {
     backgroundColor: '#F59E0B',

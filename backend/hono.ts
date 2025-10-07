@@ -20,4 +20,8 @@ app.get("/", (c) => {
   return c.json({ status: "ok", message: "API is running" });
 });
 
+app.get("/api", (c) => {
+  return c.json({ status: "ok", message: "Backend API is running" });
+});
+
 export default app;
