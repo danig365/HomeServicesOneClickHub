@@ -162,6 +162,32 @@ export default function LoginScreen() {
     }
   };
 
+  const handleTechDemoMode = async () => {
+    clearError();
+    setLocalError(null);
+    console.log('[Login] Entering tech demo mode - bypassing authentication');
+    const demoTechUser: any = {
+      id: 'demo-tech-123',
+      email: 'tech-demo@hudson.com',
+      name: 'Demo Technician',
+      phone: '555-0200',
+      role: 'tech' as const,
+      createdAt: new Date().toISOString(),
+    };
+    const demoToken = 'demo-tech-token-' + Date.now();
+    
+    try {
+      await setDemoMode(demoTechUser, demoToken);
+      console.log('[Login] Tech demo mode activated');
+      setTimeout(() => {
+        router.push('/tech-portal' as any);
+      }, 100);
+    } catch (err) {
+      console.error('[Login] Failed to set tech demo mode:', err);
+      setLocalError('Failed to enter tech demo mode');
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -321,7 +347,15 @@ export default function LoginScreen() {
               onPress={handleDemoMode}
               disabled={isLoading}
             >
-              <Text style={styles.demoButtonText}>🎮 Demo Mode (No Backend Required)</Text>
+              <Text style={styles.demoButtonText}>🎮 Homeowner Demo (No Backend)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.techDemoButton}
+              onPress={handleTechDemoMode}
+              disabled={isLoading}
+            >
+              <Text style={styles.techDemoButtonText}>🔧 Tech Portal Demo (No Backend)</Text>
             </TouchableOpacity>
 
             {backendStatus !== 'e2b-mobile' && backendStatus === 'online' && (
@@ -561,11 +595,26 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
     borderWidth: 2,
     borderColor: '#059669',
   },
   demoButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700' as const,
+  },
+  techDemoButton: {
+    backgroundColor: '#F59E0B',
+    height: 56,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#D97706',
+  },
+  techDemoButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '700' as const,
