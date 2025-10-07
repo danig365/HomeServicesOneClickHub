@@ -51,11 +51,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     setIsLoading(true);
 
     try {
+      console.log('[Auth] Attempting login for:', credentials.email);
       const result = await trpcClient.auth.login.mutate({
         email: credentials.email,
         password: credentials.password,
       });
 
+      console.log('[Auth] Login successful, storing auth data');
       await Promise.all([
         AsyncStorage.setItem(AUTH_TOKEN_KEY, result.token),
         AsyncStorage.setItem(AUTH_USER_KEY, JSON.stringify(result.user)),
@@ -64,15 +66,18 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       setToken(result.token);
       setUser(result.user);
       setIsLoading(false);
+      console.log('[Auth] Login complete, user:', result.user.email);
       return true;
     } catch (err) {
-      console.error('Login error:', err);
+      console.error('[Auth] Login error:', err);
       let errorMessage = 'Invalid email or password';
       
       if (err instanceof Error) {
-        if (err.message.includes('Network request failed') || err.message.includes('fetch failed')) {
-          errorMessage = 'Unable to connect to server. Please check your internet connection.';
-        } else if (err.message.includes('Invalid credentials')) {
+        console.error('[Auth] Error message:', err.message);
+        console.error('[Auth] Error stack:', err.stack);
+        if (err.message.includes('Network request failed') || err.message.includes('fetch failed') || err.message.includes('Failed to fetch')) {
+          errorMessage = 'Unable to connect to server. Please check your internet connection and ensure the backend is running.';
+        } else if (err.message.includes('Invalid credentials') || err.message.includes('Invalid email or password')) {
           errorMessage = 'Invalid email or password';
         } else if (!err.message.includes('Invalid')) {
           errorMessage = err.message;
@@ -90,6 +95,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     setIsLoading(true);
 
     try {
+      console.log('[Auth] Attempting signup for:', data.email);
       const result = await trpcClient.auth.signup.mutate({
         name: data.name,
         email: data.email,
@@ -98,6 +104,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         role: data.role,
       });
 
+      console.log('[Auth] Signup successful, storing auth data');
       await Promise.all([
         AsyncStorage.setItem(AUTH_TOKEN_KEY, result.token),
         AsyncStorage.setItem(AUTH_USER_KEY, JSON.stringify(result.user)),
@@ -106,14 +113,17 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       setToken(result.token);
       setUser(result.user);
       setIsLoading(false);
+      console.log('[Auth] Signup complete, user:', result.user.email);
       return true;
     } catch (err) {
-      console.error('Signup error:', err);
+      console.error('[Auth] Signup error:', err);
       let errorMessage = 'An error occurred during signup';
       
       if (err instanceof Error) {
-        if (err.message.includes('Network request failed') || err.message.includes('fetch failed')) {
-          errorMessage = 'Unable to connect to server. Please check your internet connection.';
+        console.error('[Auth] Error message:', err.message);
+        console.error('[Auth] Error stack:', err.stack);
+        if (err.message.includes('Network request failed') || err.message.includes('fetch failed') || err.message.includes('Failed to fetch')) {
+          errorMessage = 'Unable to connect to server. Please check your internet connection and ensure the backend is running.';
         } else if (err.message.includes('Email already exists')) {
           errorMessage = 'This email is already registered. Please login instead.';
         } else {

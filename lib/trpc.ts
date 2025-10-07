@@ -9,22 +9,28 @@ export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
   if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
+    console.log('[tRPC] Using EXPO_PUBLIC_RORK_API_BASE_URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
     return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
   }
 
   if (Platform.OS === 'web') {
     if (typeof window !== 'undefined') {
+      console.log('[tRPC] Using window.location.origin:', window.location.origin);
       return window.location.origin;
     }
+    console.log('[tRPC] Using fallback localhost:8081');
     return "http://localhost:8081";
   }
 
   const debuggerHost = Constants.expoConfig?.hostUri;
   if (debuggerHost) {
     const host = debuggerHost.split(':')[0];
-    return `http://${host}:8081`;
+    const url = `http://${host}:8081`;
+    console.log('[tRPC] Using debugger host:', url);
+    return url;
   }
 
+  console.log('[tRPC] Using default localhost:8081');
   return "http://localhost:8081";
 }
 
@@ -33,6 +39,17 @@ export const trpcReactClient = trpc.createClient({
     httpLink({
       url: `${getBaseUrl()}/api/trpc`,
       transformer: superjson,
+      fetch: async (url, options) => {
+        console.log('[tRPC] Fetching:', url);
+        try {
+          const response = await fetch(url, options);
+          console.log('[tRPC] Response status:', response.status);
+          return response;
+        } catch (error) {
+          console.error('[tRPC] Fetch error:', error);
+          throw error;
+        }
+      },
     }),
   ],
 });
@@ -42,6 +59,17 @@ export const trpcClient = createTRPCProxyClient<AppRouter>({
     httpLink({
       url: `${getBaseUrl()}/api/trpc`,
       transformer: superjson,
+      fetch: async (url, options) => {
+        console.log('[tRPC] Fetching:', url);
+        try {
+          const response = await fetch(url, options);
+          console.log('[tRPC] Response status:', response.status);
+          return response;
+        } catch (error) {
+          console.error('[tRPC] Fetch error:', error);
+          throw error;
+        }
+      },
     }),
   ],
 });

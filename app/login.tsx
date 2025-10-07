@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,8 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/auth-store';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Lock, Mail } from 'lucide-react-native';
+import { Lock, Mail, Wifi, WifiOff } from 'lucide-react-native';
+import Constants from 'expo-constants';
 
 const TEAL = '#14B8A6';
 const CREAM = '#FFF8E7';
@@ -24,6 +25,62 @@ export default function LoginScreen() {
   const { login, error, clearError, isLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [backendUrl, setBackendUrl] = useState<string>('');
+
+  const getBaseUrl = () => {
+    if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
+      return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+    }
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') {
+        return window.location.origin;
+      }
+      return "http://localhost:8081";
+    }
+
+    const debuggerHost = Constants.expoConfig?.hostUri;
+    if (debuggerHost) {
+      const host = debuggerHost.split(':')[0];
+      return `http://${host}:8081`;
+    }
+
+    return "http://localhost:8081";
+  };
+
+  const checkBackendConnection = useCallback(async () => {
+    const baseUrl = getBaseUrl();
+    setBackendUrl(baseUrl);
+    console.log('[Login] Checking backend connection at:', baseUrl);
+    
+    try {
+      const response = await fetch(`${baseUrl}/api`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+      
+      console.log('[Login] Backend response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[Login] Backend response:', data);
+        setBackendStatus('online');
+      } else {
+        console.error('[Login] Backend returned error status:', response.status);
+        setBackendStatus('offline');
+      }
+    } catch (err) {
+      console.error('[Login] Backend connection failed:', err);
+      setBackendStatus('offline');
+    }
+  }, []);
+
+  useEffect(() => {
+    checkBackendConnection();
+  }, [checkBackendConnection]);
 
   const handleLogin = async () => {
     clearError();
@@ -51,6 +108,40 @@ export default function LoginScreen() {
           <View style={styles.formContainer}>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>Sign in to continue</Text>
+
+            <View style={[
+              styles.statusContainer,
+              backendStatus === 'online' ? styles.statusOnline : 
+              backendStatus === 'offline' ? styles.statusOffline : 
+              styles.statusChecking
+            ]}>
+              {backendStatus === 'checking' ? (
+                <ActivityIndicator size="small" color={TEAL} />
+              ) : backendStatus === 'online' ? (
+                <Wifi size={16} color="#10B981" />
+              ) : (
+                <WifiOff size={16} color="#EF4444" />
+              )}
+              <Text style={styles.statusText}>
+                {backendStatus === 'checking' ? 'Checking server...' :
+                 backendStatus === 'online' ? 'Server connected' :
+                 'Server offline'}
+              </Text>
+            </View>
+
+            {backendStatus === 'offline' && (
+              <View style={styles.warningContainer}>
+                <Text style={styles.warningText}>
+                  Cannot connect to backend server at {backendUrl}
+                </Text>
+                <TouchableOpacity 
+                  style={styles.retryButton}
+                  onPress={checkBackendConnection}
+                >
+                  <Text style={styles.retryButtonText}>Retry Connection</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {error ? (
               <View style={styles.errorContainer}>
@@ -188,6 +279,49 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#DC2626',
     fontSize: 14,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  statusChecking: {
+    backgroundColor: '#F3F4F6',
+  },
+  statusOnline: {
+    backgroundColor: '#D1FAE5',
+  },
+  statusOffline: {
+    backgroundColor: '#FEE2E2',
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+  },
+  warningContainer: {
+    backgroundColor: '#FEF3C7',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  warningText: {
+    color: '#92400E',
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  retryButton: {
+    backgroundColor: '#F59E0B',
+    padding: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600' as const,
   },
   inputContainer: {
     gap: 16,
