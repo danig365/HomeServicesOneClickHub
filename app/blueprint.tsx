@@ -76,8 +76,14 @@ export default function BlueprintScreen() {
       
       Alert.alert(
         'Blueprint Created!',
-        'Your MyHome Blueprint has been saved.',
-        [{ text: 'Done', onPress: () => setMode('view') }]
+        'Your MyHome Blueprint has been saved. Would you like to generate an AI-powered 5-year plan?',
+        [
+          { text: 'Later', style: 'cancel', onPress: () => setMode('view') },
+          { text: 'Generate Plan', onPress: () => {
+            setMode('view');
+            router.push({ pathname: '/five-year-plan', params: { propertyId: property.id } });
+          }}
+        ]
       );
     } catch (error) {
       console.error('[Blueprint] Failed to save blueprint:', error);

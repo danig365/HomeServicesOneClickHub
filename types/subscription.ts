@@ -18,6 +18,32 @@ export interface MonthlyVisitRequest {
   createdAt: string;
 }
 
+export interface YearlyPlanItem {
+  id: string;
+  year: number;
+  quarter: 1 | 2 | 3 | 4;
+  title: string;
+  description: string;
+  category: 'maintenance' | 'upgrade' | 'repair' | 'inspection' | 'seasonal';
+  estimatedCost?: string;
+  priority: 'low' | 'medium' | 'high';
+  dependencies?: string[];
+  notes?: string;
+}
+
+export interface FiveYearPlan {
+  id: string;
+  propertyId: string;
+  blueprintId: string;
+  createdAt: string;
+  updatedAt: string;
+  generatedByAI: boolean;
+  items: YearlyPlanItem[];
+  summary: string;
+  totalEstimatedCost?: string;
+  keyMilestones: string[];
+}
+
 export interface MyHomeBlueprint {
   id: string;
   propertyId: string;
@@ -29,6 +55,7 @@ export interface MyHomeBlueprint {
   monthlyVisitRequests: MonthlyVisitRequest[];
   budgetRange?: string;
   timeline?: string;
+  fiveYearPlan?: FiveYearPlan;
 }
 
 export interface MyHomeScore {

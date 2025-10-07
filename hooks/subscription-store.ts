@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Subscription, HudsonVisit, MyHomeBlueprint, MyHomeScore, CustomProject, MonthlyVisitRequest, SnapshotInspection, RoomInspection } from '@/types/subscription';
+import { Subscription, HudsonVisit, MyHomeBlueprint, MyHomeScore, CustomProject, MonthlyVisitRequest, SnapshotInspection, RoomInspection, FiveYearPlan } from '@/types/subscription';
 import { getMonthlyTasks } from '@/constants/maintenance-tasks';
 
 const STORAGE_KEY = 'hudson_subscriptions';
@@ -452,6 +452,25 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     return subscription.snapshotInspections.find(s => s.status === 'scheduled' || s.status === 'in-progress') || null;
   }, [subscriptions]);
 
+  const updateFiveYearPlan = useCallback(async (propertyId: string, plan: FiveYearPlan) => {
+    console.log('[SubscriptionStore] Updating five-year plan for property:', propertyId);
+    
+    const subscription = subscriptions[propertyId];
+    if (!subscription?.blueprint) {
+      console.error('[SubscriptionStore] No blueprint found for property:', propertyId);
+      return;
+    }
+    
+    const updatedBlueprint = {
+      ...subscription.blueprint,
+      fiveYearPlan: plan,
+      updatedAt: new Date().toISOString(),
+    };
+    
+    await updateBlueprint(propertyId, updatedBlueprint);
+    console.log('[SubscriptionStore] Five-year plan saved successfully');
+  }, [subscriptions, updateBlueprint]);
+
   return useMemo(() => ({
     subscriptions,
     isLoading,
@@ -477,6 +496,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     deleteRoomInspection,
     getSnapshotInspection,
     getActiveSnapshotInspection,
+    updateFiveYearPlan,
   }), [
     subscriptions,
     isLoading,
@@ -502,5 +522,6 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     deleteRoomInspection,
     getSnapshotInspection,
     getActiveSnapshotInspection,
+    updateFiveYearPlan,
   ]);
 });
