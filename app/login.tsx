@@ -42,11 +42,10 @@ export default function LoginScreen() {
 
     const debuggerHost = Constants.expoConfig?.hostUri;
     if (debuggerHost) {
-      const hostWithPort = debuggerHost.split(':').slice(0, 2).join(':');
       const host = debuggerHost.split(':')[0];
       
       if (host.includes('.e2b.app') || host.includes('tunnel')) {
-        return `https://${hostWithPort}`;
+        return `https://${host}`;
       }
       
       return `http://${host}:8081`;
