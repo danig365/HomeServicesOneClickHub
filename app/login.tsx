@@ -53,10 +53,15 @@ export default function LoginScreen() {
     const baseUrl = getBaseUrl();
     setBackendUrl(baseUrl);
     console.log('[Login] Checking backend connection at:', baseUrl);
+    console.log('[Login] Platform:', Platform.OS);
+    console.log('[Login] EXPO_PUBLIC_RORK_API_BASE_URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
     
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => {
+        console.log('[Login] Backend check timeout after 8s');
+        controller.abort();
+      }, 8000);
       
       const response = await fetch(`${baseUrl}/api`, {
         method: 'GET',
@@ -82,6 +87,7 @@ export default function LoginScreen() {
       if (err instanceof Error) {
         console.error('[Login] Error name:', err.name);
         console.error('[Login] Error message:', err.message);
+        console.error('[Login] Error stack:', err.stack);
       }
       setBackendStatus('offline');
     }
@@ -93,7 +99,12 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     clearError();
-    await login({ email, password });
+    console.log('[Login] Starting login process');
+    const success = await login({ email, password });
+    console.log('[Login] Login result:', success);
+    if (success) {
+      console.log('[Login] Login successful, navigation should happen automatically');
+    }
   };
 
   return (

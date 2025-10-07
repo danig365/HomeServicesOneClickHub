@@ -9,14 +9,16 @@ export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
   if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
-    console.log('[tRPC] Using EXPO_PUBLIC_RORK_API_BASE_URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
-    return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+    const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+    console.log('[tRPC] Using EXPO_PUBLIC_RORK_API_BASE_URL:', url);
+    return url;
   }
 
   if (Platform.OS === 'web') {
     if (typeof window !== 'undefined') {
-      console.log('[tRPC] Using window.location.origin:', window.location.origin);
-      return window.location.origin;
+      const origin = window.location.origin;
+      console.log('[tRPC] Using window.location.origin:', origin);
+      return origin;
     }
     console.log('[tRPC] Using fallback localhost:8081');
     return "http://localhost:8081";
@@ -41,14 +43,15 @@ export const trpcReactClient = trpc.createClient({
       url: `${getBaseUrl()}/api/trpc`,
       transformer: superjson,
       fetch: async (url, options) => {
-        console.log('[tRPC] Fetching:', url);
-        console.log('[tRPC] Platform:', Platform.OS);
+        console.log('[tRPC React] Fetching:', url);
+        console.log('[tRPC React] Platform:', Platform.OS);
+        console.log('[tRPC React] Base URL:', getBaseUrl());
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => {
-            console.log('[tRPC] Request timeout after 10s');
+            console.log('[tRPC React] Request timeout after 15s');
             controller.abort();
-          }, 10000);
+          }, 15000);
 
           const response = await fetch(url, {
             ...options,
@@ -56,16 +59,17 @@ export const trpcReactClient = trpc.createClient({
           });
           
           clearTimeout(timeoutId);
-          console.log('[tRPC] Response status:', response.status);
+          console.log('[tRPC React] Response status:', response.status);
           return response;
         } catch (error) {
-          console.error('[tRPC] Fetch error:', error);
+          console.error('[tRPC React] Fetch error:', error);
           if (error instanceof Error) {
-            console.error('[tRPC] Error details:', {
+            console.error('[tRPC React] Error details:', {
               name: error.name,
               message: error.message,
               platform: Platform.OS,
               url: url,
+              baseUrl: getBaseUrl(),
             });
           }
           throw error;
@@ -81,14 +85,15 @@ export const trpcClient = createTRPCProxyClient<AppRouter>({
       url: `${getBaseUrl()}/api/trpc`,
       transformer: superjson,
       fetch: async (url, options) => {
-        console.log('[tRPC] Fetching:', url);
-        console.log('[tRPC] Platform:', Platform.OS);
+        console.log('[tRPC Client] Fetching:', url);
+        console.log('[tRPC Client] Platform:', Platform.OS);
+        console.log('[tRPC Client] Base URL:', getBaseUrl());
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => {
-            console.log('[tRPC] Request timeout after 10s');
+            console.log('[tRPC Client] Request timeout after 15s');
             controller.abort();
-          }, 10000);
+          }, 15000);
 
           const response = await fetch(url, {
             ...options,
@@ -96,16 +101,17 @@ export const trpcClient = createTRPCProxyClient<AppRouter>({
           });
           
           clearTimeout(timeoutId);
-          console.log('[tRPC] Response status:', response.status);
+          console.log('[tRPC Client] Response status:', response.status);
           return response;
         } catch (error) {
-          console.error('[tRPC] Fetch error:', error);
+          console.error('[tRPC Client] Fetch error:', error);
           if (error instanceof Error) {
-            console.error('[tRPC] Error details:', {
+            console.error('[tRPC Client] Error details:', {
               name: error.name,
               message: error.message,
               platform: Platform.OS,
               url: url,
+              baseUrl: getBaseUrl(),
             });
           }
           throw error;
