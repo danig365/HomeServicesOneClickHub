@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert, Platform, Image } from 'react-native';
 import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Icons from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Audio } from 'expo-av';
 import { useProperties } from '@/hooks/properties-store';
 import { useSnapshots } from '@/hooks/snapshot-store';
@@ -52,6 +53,13 @@ export default function SnapshotInspectionScreen() {
   
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<'back' | 'front'>('back');
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
+  const [capturedMedia, setCapturedMedia] = useState<string | null>(null);
+  const [isRecordingVideo, setIsRecordingVideo] = useState(false);
+  const cameraRef = React.useRef<any>(null);
 
   const snapshot = snapshots.find(s => s.id === id);
   const property = snapshot?.propertyId ? properties.find(p => p.id === snapshot.propertyId) : null;
@@ -122,33 +130,98 @@ export default function SnapshotInspectionScreen() {
     Alert.alert('Success', 'Room added to inspection');
   };
 
-  const handleTakePhoto = async (roomId?: string) => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
+  const handleOpenCamera = async (roomId?: string, mode: 'photo' | 'video' = 'photo') => {
+    if (!cameraPermission) {
+      const result = await requestCameraPermission();
+      if (!result?.granted) {
+        Alert.alert('Permission Required', 'Camera permission is required');
+        return;
+      }
+    }
+
+    if (!cameraPermission?.granted) {
       Alert.alert('Permission Required', 'Camera permission is required');
       return;
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-      allowsEditing: true,
-    });
+    setCurrentRoomId(roomId || null);
+    setShowCameraModal(true);
+  };
 
-    if (!result.canceled && result.assets[0] && roomId && snapshot) {
-      const room = snapshot.rooms.find(r => r.id === roomId);
-      if (room) {
-        const newImage = {
-          id: `img-${Date.now()}`,
-          type: 'image' as const,
-          uri: result.assets[0].uri,
-          timestamp: new Date().toISOString(),
-        };
-        await updateRoomInspection(snapshot.id, roomId, {
-          images: [...room.images, newImage],
-        });
-        Alert.alert('Success', 'Photo added');
+  const handleTakePhoto = async () => {
+    if (!cameraRef.current) return;
+
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+      });
+
+      if (photo && currentRoomId && snapshot) {
+        const room = snapshot.rooms.find(r => r.id === currentRoomId);
+        if (room) {
+          const newImage = {
+            id: `img-${Date.now()}`,
+            type: 'image' as const,
+            uri: photo.uri,
+            timestamp: new Date().toISOString(),
+          };
+          await updateRoomInspection(snapshot.id, currentRoomId, {
+            images: [...room.images, newImage],
+          });
+          setCapturedMedia(photo.uri);
+          setTimeout(() => {
+            setCapturedMedia(null);
+            setShowCameraModal(false);
+          }, 1500);
+          Alert.alert('Success', 'Photo captured');
+        }
       }
+    } catch (error) {
+      console.error('Failed to take photo:', error);
+      Alert.alert('Error', 'Failed to capture photo');
+    }
+  };
+
+  const handleStartVideoRecording = async () => {
+    if (!cameraRef.current || isRecordingVideo) return;
+
+    try {
+      setIsRecordingVideo(true);
+      const video = await cameraRef.current.recordAsync({
+        maxDuration: 60,
+      });
+
+      if (video && currentRoomId && snapshot) {
+        const room = snapshot.rooms.find(r => r.id === currentRoomId);
+        if (room) {
+          const newVideo = {
+            id: `video-${Date.now()}`,
+            type: 'image' as const,
+            uri: video.uri,
+            timestamp: new Date().toISOString(),
+            notes: 'Video recording',
+          };
+          await updateRoomInspection(snapshot.id, currentRoomId, {
+            images: [...room.images, newVideo],
+          });
+          Alert.alert('Success', 'Video recorded');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to record video:', error);
+      Alert.alert('Error', 'Failed to record video');
+    } finally {
+      setIsRecordingVideo(false);
+    }
+  };
+
+  const handleStopVideoRecording = async () => {
+    if (!cameraRef.current || !isRecordingVideo) return;
+
+    try {
+      await cameraRef.current.stopRecording();
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
     }
   };
 
@@ -552,48 +625,64 @@ export default function SnapshotInspectionScreen() {
                   <View style={styles.mediaButtons}>
                     <TouchableOpacity
                       style={styles.mediaButton}
-                      onPress={() => handleTakePhoto(selectedRoom.id)}
+                      onPress={() => handleOpenCamera(selectedRoom.id, 'photo')}
                     >
                       <Icons.Camera size={20} color="#F59E0B" />
-                      <Text style={styles.mediaButtonText}>Take Photo</Text>
+                      <Text style={styles.mediaButtonText}>Photo</Text>
                     </TouchableOpacity>
                     
                     {Platform.OS !== 'web' && (
-                      <TouchableOpacity
-                        style={[styles.mediaButton, isRecording && styles.mediaButtonRecording]}
-                        onPress={isRecording ? () => handleStopRecording(selectedRoom.id) : () => handleStartRecording(selectedRoom.id)}
-                      >
-                        <Icons.Mic size={20} color={isRecording ? 'white' : '#F59E0B'} />
-                        <Text style={[styles.mediaButtonText, isRecording && styles.mediaButtonTextRecording]}>
-                          {isRecording ? 'Stop' : 'Record'}
-                        </Text>
-                      </TouchableOpacity>
+                      <>
+                        <TouchableOpacity
+                          style={styles.mediaButton}
+                          onPress={() => handleOpenCamera(selectedRoom.id, 'video')}
+                        >
+                          <Icons.Video size={20} color="#F59E0B" />
+                          <Text style={styles.mediaButtonText}>Video</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.mediaButton, isRecording && styles.mediaButtonRecording]}
+                          onPress={isRecording ? () => handleStopRecording(selectedRoom.id) : () => handleStartRecording(selectedRoom.id)}
+                        >
+                          <Icons.Mic size={20} color={isRecording ? 'white' : '#F59E0B'} />
+                          <Text style={[styles.mediaButtonText, isRecording && styles.mediaButtonTextRecording]}>
+                            {isRecording ? 'Stop' : 'Audio'}
+                          </Text>
+                        </TouchableOpacity>
+                      </>
                     )}
                   </View>
 
                   {selectedRoom.images.length > 0 && (
                     <View style={styles.mediaSection}>
-                      <Text style={styles.mediaSectionTitle}>Photos ({selectedRoom.images.length})</Text>
-                      {selectedRoom.images.map((img) => (
-                        <View key={img.id} style={styles.mediaItem}>
-                          <Icons.Image size={16} color="#F59E0B" />
-                          <Text style={styles.mediaItemText}>
-                            {new Date(img.timestamp).toLocaleString()}
-                          </Text>
-                        </View>
-                      ))}
+                      <Text style={styles.mediaSectionTitle}>Photos & Videos ({selectedRoom.images.length})</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mediaGallery}>
+                        {selectedRoom.images.map((img) => (
+                          <View key={img.id} style={styles.mediaPreviewContainer}>
+                            <Image source={{ uri: img.uri }} style={styles.mediaPreview} />
+                            <Text style={styles.mediaTimestamp}>
+                              {new Date(img.timestamp).toLocaleTimeString()}
+                            </Text>
+                          </View>
+                        ))}
+                      </ScrollView>
                     </View>
                   )}
 
                   {selectedRoom.audioNotes.length > 0 && (
                     <View style={styles.mediaSection}>
                       <Text style={styles.mediaSectionTitle}>Audio Notes ({selectedRoom.audioNotes.length})</Text>
-                      {selectedRoom.audioNotes.map((audio) => (
-                        <View key={audio.id} style={styles.mediaItem}>
-                          <Icons.Mic size={16} color="#F59E0B" />
-                          <Text style={styles.mediaItemText}>
-                            {new Date(audio.timestamp).toLocaleString()}
-                          </Text>
+                      {selectedRoom.audioNotes.map((audio, index) => (
+                        <View key={audio.id} style={styles.audioNoteItem}>
+                          <View style={styles.audioNoteIcon}>
+                            <Icons.Mic size={16} color="white" />
+                          </View>
+                          <View style={styles.audioNoteInfo}>
+                            <Text style={styles.audioNoteTitle}>Audio Note {index + 1}</Text>
+                            <Text style={styles.audioNoteTime}>
+                              {new Date(audio.timestamp).toLocaleString()}
+                            </Text>
+                          </View>
                         </View>
                       ))}
                     </View>
@@ -760,6 +849,72 @@ export default function SnapshotInspectionScreen() {
               </TouchableOpacity>
             </ScrollView>
           </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showCameraModal}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setShowCameraModal(false)}
+      >
+        <View style={styles.cameraContainer}>
+          {capturedMedia ? (
+            <View style={styles.capturePreview}>
+              <Image source={{ uri: capturedMedia }} style={styles.capturePreviewImage} />
+              <View style={styles.captureOverlay}>
+                <Icons.CheckCircle size={64} color="#10B981" />
+                <Text style={styles.captureSuccessText}>Captured!</Text>
+              </View>
+            </View>
+          ) : (
+            <>
+              <CameraView
+                ref={cameraRef}
+                style={styles.camera}
+                facing={cameraFacing}
+              >
+                <View style={styles.cameraOverlay}>
+                  <View style={styles.cameraHeader}>
+                    <TouchableOpacity
+                      style={styles.cameraCloseButton}
+                      onPress={() => setShowCameraModal(false)}
+                    >
+                      <Icons.X size={28} color="white" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.cameraFlipButton}
+                      onPress={() => setCameraFacing(current => current === 'back' ? 'front' : 'back')}
+                    >
+                      <Icons.RefreshCw size={28} color="white" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.cameraControls}>
+                    <TouchableOpacity
+                      style={styles.captureButton}
+                      onPress={handleTakePhoto}
+                    >
+                      <View style={styles.captureButtonInner} />
+                    </TouchableOpacity>
+                    
+                    {Platform.OS !== 'web' && (
+                      <TouchableOpacity
+                        style={[styles.videoButton, isRecordingVideo && styles.videoButtonRecording]}
+                        onPress={isRecordingVideo ? handleStopVideoRecording : handleStartVideoRecording}
+                      >
+                        {isRecordingVideo ? (
+                          <Icons.Square size={24} color="white" />
+                        ) : (
+                          <Icons.Video size={24} color="white" />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              </CameraView>
+            </>
+          )}
         </View>
       </Modal>
     </View>
@@ -1134,7 +1289,7 @@ const styles = StyleSheet.create({
   },
   mediaButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
     marginBottom: 20,
   },
   mediaButton: {
@@ -1142,18 +1297,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
+    gap: 6,
+    paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#F59E0B',
+    backgroundColor: 'white',
   },
   mediaButtonRecording: {
     backgroundColor: '#EF4444',
     borderColor: '#EF4444',
   },
   mediaButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600' as const,
     color: '#F59E0B',
   },
@@ -1241,6 +1397,148 @@ const styles = StyleSheet.create({
   },
   propertyOptionAddress: {
     fontSize: 13,
+    color: '#6B7280',
+  },
+  cameraContainer: {
+    flex: 1,
+    backgroundColor: 'black',
+  },
+  camera: {
+    flex: 1,
+  },
+  cameraOverlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    justifyContent: 'space-between',
+  },
+  cameraHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 20,
+    paddingTop: 60,
+  },
+  cameraCloseButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraFlipButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraControls: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingBottom: 40,
+    gap: 30,
+  },
+  captureButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: '#F59E0B',
+  },
+  captureButtonInner: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F59E0B',
+  },
+  videoButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(245, 158, 11, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoButtonRecording: {
+    backgroundColor: '#EF4444',
+  },
+  capturePreview: {
+    flex: 1,
+    position: 'relative',
+  },
+  capturePreviewImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  captureOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  captureSuccessText: {
+    fontSize: 24,
+    fontWeight: '700' as const,
+    color: 'white',
+  },
+  mediaGallery: {
+    flexDirection: 'row',
+  },
+  mediaPreviewContainer: {
+    marginRight: 12,
+    alignItems: 'center',
+  },
+  mediaPreview: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+  },
+  mediaTimestamp: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  audioNoteItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  audioNoteIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F59E0B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  audioNoteInfo: {
+    flex: 1,
+  },
+  audioNoteTitle: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: '#111827',
+    marginBottom: 2,
+  },
+  audioNoteTime: {
+    fontSize: 12,
     color: '#6B7280',
   },
 });

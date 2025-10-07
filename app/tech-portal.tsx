@@ -145,11 +145,15 @@ export default function TechPortalScreen() {
       }} />
 
       <View style={styles.header}>
-        <Icons.Wrench size={32} color={COLORS.gold} />
+        <View style={styles.headerIconContainer}>
+          <Icons.Wrench size={28} color="white" />
+        </View>
         <Text style={styles.headerTitle}>Hudson Tech Portal</Text>
-        <Text style={styles.headerSubtitle}>
-          {isAdmin ? 'Admin View' : isTech ? 'Technician View' : 'View Only'}
-        </Text>
+        <View style={styles.headerBadge}>
+          <Text style={styles.headerBadgeText}>
+            {isAdmin ? 'Admin' : isTech ? 'Technician' : 'View Only'}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.viewToggle}>
@@ -191,8 +195,11 @@ export default function TechPortalScreen() {
             <Text style={styles.sectionTitle}>In Progress</Text>
             {inProgressAppointments.length === 0 ? (
               <View style={styles.emptyState}>
-                <Icons.Clock size={48} color="#D1D5DB" />
+                <View style={styles.emptyIconContainer}>
+                  <Icons.Clock size={40} color="#9CA3AF" />
+                </View>
                 <Text style={styles.emptyText}>No appointments in progress</Text>
+                <Text style={styles.emptySubtext}>Start working on scheduled appointments</Text>
               </View>
             ) : (
               inProgressAppointments.map((apt) => {
@@ -206,21 +213,26 @@ export default function TechPortalScreen() {
                     onPress={() => router.push(`/appointment/${apt.id}` as any)}
                   >
                     <View style={styles.appointmentHeader}>
+                      <View style={styles.appointmentIconBadge}>
+                        {apt.type === 'snapshot' ? (
+                          <Icons.Camera size={20} color="#F59E0B" />
+                        ) : (
+                          <Icons.Wrench size={20} color={COLORS.teal} />
+                        )}
+                      </View>
                       <View style={styles.appointmentInfo}>
                         <Text style={styles.appointmentProperty}>{property.name}</Text>
                         <Text style={styles.appointmentAddress}>{property.address}</Text>
+                        <View style={styles.appointmentMetaRow}>
+                          <Icons.Calendar size={14} color="#6B7280" />
+                          <Text style={styles.metaText}>{formatDate(apt.scheduledDate)}</Text>
+                          <View style={styles.statusBadge}>
+                            <View style={styles.statusDot} />
+                            <Text style={styles.statusText}>In Progress</Text>
+                          </View>
+                        </View>
                       </View>
-                      <View style={[styles.typeBadge, { backgroundColor: apt.type === 'snapshot' ? '#FEF3C7' : '#DBEAFE' }]}>
-                        <Text style={[styles.typeBadgeText, { color: apt.type === 'snapshot' ? '#B45309' : '#1E40AF' }]}>
-                          {apt.type === 'snapshot' ? 'Snapshot' : 'Standard'}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.appointmentMeta}>
-                      <Icons.Calendar size={16} color="#6B7280" />
-                      <Text style={styles.metaText}>{formatDate(apt.scheduledDate)}</Text>
-                      <Icons.Clock size={16} color="#10B981" style={{ marginLeft: 12 }} />
-                      <Text style={[styles.metaText, { color: '#10B981' }]}>In Progress</Text>
+                      <Icons.ChevronRight size={20} color="#9CA3AF" />
                     </View>
                   </TouchableOpacity>
                 );
@@ -232,8 +244,11 @@ export default function TechPortalScreen() {
             <Text style={styles.sectionTitle}>Upcoming Appointments</Text>
             {upcomingAppointments.length === 0 ? (
               <View style={styles.emptyState}>
-                <Icons.Calendar size={48} color="#D1D5DB" />
+                <View style={styles.emptyIconContainer}>
+                  <Icons.Calendar size={40} color="#9CA3AF" />
+                </View>
                 <Text style={styles.emptyText}>No upcoming appointments</Text>
+                <Text style={styles.emptySubtext}>Schedule new appointments from properties</Text>
               </View>
             ) : (
               upcomingAppointments.map((apt) => {
@@ -247,19 +262,22 @@ export default function TechPortalScreen() {
                     onPress={() => router.push(`/appointment/${apt.id}` as any)}
                   >
                     <View style={styles.appointmentHeader}>
+                      <View style={styles.appointmentIconBadge}>
+                        {apt.type === 'snapshot' ? (
+                          <Icons.Camera size={20} color="#F59E0B" />
+                        ) : (
+                          <Icons.Wrench size={20} color={COLORS.teal} />
+                        )}
+                      </View>
                       <View style={styles.appointmentInfo}>
                         <Text style={styles.appointmentProperty}>{property.name}</Text>
                         <Text style={styles.appointmentAddress}>{property.address}</Text>
+                        <View style={styles.appointmentMetaRow}>
+                          <Icons.Calendar size={14} color="#6B7280" />
+                          <Text style={styles.metaText}>{formatDate(apt.scheduledDate)}</Text>
+                        </View>
                       </View>
-                      <View style={[styles.typeBadge, { backgroundColor: apt.type === 'snapshot' ? '#FEF3C7' : '#DBEAFE' }]}>
-                        <Text style={[styles.typeBadgeText, { color: apt.type === 'snapshot' ? '#B45309' : '#1E40AF' }]}>
-                          {apt.type === 'snapshot' ? 'Snapshot' : 'Standard'}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.appointmentMeta}>
-                      <Icons.Calendar size={16} color="#6B7280" />
-                      <Text style={styles.metaText}>{formatDate(apt.scheduledDate)}</Text>
+                      <Icons.ChevronRight size={20} color="#9CA3AF" />
                     </View>
                   </TouchableOpacity>
                 );
@@ -561,19 +579,39 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: COLORS.teal,
-    padding: 20,
+    padding: 24,
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
+  },
+  headerIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: COLORS.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700' as const,
-    color: COLORS.gold,
+    fontSize: 24,
+    fontWeight: '800' as const,
+    color: 'white',
+    letterSpacing: 0.5,
   },
-  headerSubtitle: {
-    fontSize: 14,
-    color: COLORS.cream,
-    opacity: 0.9,
+  headerBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  headerBadgeText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: 'white',
   },
   viewToggle: {
     flexDirection: 'row',
@@ -614,12 +652,27 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    padding: 40,
+    padding: 48,
     gap: 12,
   },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
   emptyText: {
-    fontSize: 16,
+    fontSize: 17,
+    fontWeight: '600' as const,
+    color: '#111827',
+  },
+  emptySubtext: {
+    fontSize: 14,
     color: '#6B7280',
+    textAlign: 'center',
   },
   appointmentCard: {
     backgroundColor: 'white',
@@ -628,46 +681,68 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
   },
   appointmentHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    gap: 12,
+  },
+  appointmentIconBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F9FAFB',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   appointmentInfo: {
     flex: 1,
   },
   appointmentProperty: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700' as const,
     color: '#111827',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   appointmentAddress: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6B7280',
+    marginBottom: 6,
   },
-  typeBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  typeBadgeText: {
-    fontSize: 12,
-    fontWeight: '600' as const,
-  },
-  appointmentMeta: {
+  appointmentMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   metaText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6B7280',
+    marginRight: 8,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: '#10B981',
   },
   searchContainer: {
     flexDirection: 'row',
