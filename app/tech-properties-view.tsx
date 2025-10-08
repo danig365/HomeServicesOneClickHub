@@ -38,6 +38,7 @@ export default function TechPropertiesViewScreen() {
   const [expandedPropertyId, setExpandedPropertyId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'appointments' | 'snapshots' | 'blueprints'>('all');
   const [showQuickStartModal, setShowQuickStartModal] = useState(false);
+  const [selectedQuickStartProperty, setSelectedQuickStartProperty] = useState<Property | null>(null);
 
   const isTech = currentUser?.role === 'tech';
   const techId = isTech ? currentUser?.id : undefined;
@@ -106,23 +107,11 @@ export default function TechPropertiesViewScreen() {
   }, [propertiesWithData, searchQuery, filterType]);
 
   const handleQuickStartSnapshot = async (property: Property) => {
-    const techId = isTech ? currentUser?.id : undefined;
-    if (!techId) {
-      Alert.alert('Error', 'No tech available');
-      return;
-    }
-
-    try {
-      const snapshot = await createSnapshot(techId, property.id);
-      console.log('Created standalone snapshot:', snapshot);
-      setShowQuickStartModal(false);
-      setTimeout(() => {
-        router.push(`/snapshot-inspection/${snapshot.id}` as any);
-      }, 100);
-    } catch (error) {
-      console.error('Failed to create snapshot:', error);
-      Alert.alert('Error', 'Failed to start snapshot inspection');
-    }
+    setSelectedQuickStartProperty(property);
+    setShowQuickStartModal(false);
+    setTimeout(() => {
+      router.push(`/quickstart-snapshot?propertyId=${property.id}` as any);
+    }, 100);
   };
 
   const togglePropertyExpansion = (propertyId: string) => {
@@ -240,48 +229,51 @@ export default function TechPropertiesViewScreen() {
           onPress={() => setShowQuickStartModal(true)}
         >
           <Icons.Zap size={20} color="white" />
-          <Text style={styles.quickActionText}>QuickStart</Text>
+          <Text style={styles.quickActionText}>QuickStart Snapshot</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.filterChip, filterType === 'all' && styles.filterChipActive]}
-          onPress={() => setFilterType('all')}
-        >
-          <Icons.List size={16} color={filterType === 'all' ? 'white' : COLORS.teal} />
-          <Text style={[styles.filterChipText, filterType === 'all' && styles.filterChipTextActive]}>
-            All
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterChip, filterType === 'appointments' && styles.filterChipActive]}
-          onPress={() => setFilterType('appointments')}
-        >
-          <Icons.Calendar size={16} color={filterType === 'appointments' ? 'white' : COLORS.teal} />
-          <Text style={[styles.filterChipText, filterType === 'appointments' && styles.filterChipTextActive]}>
-            Appointments
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterChip, filterType === 'snapshots' && styles.filterChipActive]}
-          onPress={() => setFilterType('snapshots')}
-        >
-          <Icons.Camera size={16} color={filterType === 'snapshots' ? 'white' : COLORS.teal} />
-          <Text style={[styles.filterChipText, filterType === 'snapshots' && styles.filterChipTextActive]}>
-            Snapshots
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterChip, filterType === 'blueprints' && styles.filterChipActive]}
-          onPress={() => setFilterType('blueprints')}
-        >
-          <Icons.FileText size={16} color={filterType === 'blueprints' ? 'white' : COLORS.teal} />
-          <Text style={[styles.filterChipText, filterType === 'blueprints' && styles.filterChipTextActive]}>
-            Blueprints
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
+      <View style={styles.filterSection}>
+        <Text style={styles.filterLabel}>Filter by:</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+          <TouchableOpacity
+            style={[styles.filterChip, filterType === 'all' && styles.filterChipActive]}
+            onPress={() => setFilterType('all')}
+          >
+            <Icons.List size={14} color={filterType === 'all' ? 'white' : COLORS.teal} />
+            <Text style={[styles.filterChipText, filterType === 'all' && styles.filterChipTextActive]}>
+              All
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterChip, filterType === 'appointments' && styles.filterChipActive]}
+            onPress={() => setFilterType('appointments')}
+          >
+            <Icons.Calendar size={14} color={filterType === 'appointments' ? 'white' : COLORS.teal} />
+            <Text style={[styles.filterChipText, filterType === 'appointments' && styles.filterChipTextActive]}>
+              Appointments
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterChip, filterType === 'snapshots' && styles.filterChipActive]}
+            onPress={() => setFilterType('snapshots')}
+          >
+            <Icons.Camera size={14} color={filterType === 'snapshots' ? 'white' : COLORS.teal} />
+            <Text style={[styles.filterChipText, filterType === 'snapshots' && styles.filterChipTextActive]}>
+              Snapshots
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterChip, filterType === 'blueprints' && styles.filterChipActive]}
+            onPress={() => setFilterType('blueprints')}
+          >
+            <Icons.FileText size={14} color={filterType === 'blueprints' ? 'white' : COLORS.teal} />
+            <Text style={[styles.filterChipText, filterType === 'blueprints' && styles.filterChipTextActive]}>
+              Blueprints
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
 
       <ScrollView style={styles.scrollView}>
         <View style={styles.section}>
@@ -536,7 +528,7 @@ export default function TechPropertiesViewScreen() {
 
             <ScrollView style={styles.modalScroll}>
               <Text style={styles.quickStartDescription}>
-                Start a MyHome Snapshot inspection immediately. Select a property to begin.
+                Start a room-by-room photo inspection. QuickStart guides you through each room with an intuitive camera interface.
               </Text>
 
               <View style={styles.propertiesList}>
@@ -665,17 +657,28 @@ const styles = StyleSheet.create({
   clearButton: {
     padding: 4,
   },
-  filterContainer: {
+  filterSection: {
     paddingHorizontal: 16,
     marginBottom: 12,
+  },
+  filterLabel: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: '#6B7280',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  filterContainer: {
+    flexDirection: 'row',
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: COLORS.teal,
     backgroundColor: 'white',
@@ -686,7 +689,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.teal,
   },
   filterChipText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600' as const,
     color: COLORS.teal,
   },
@@ -911,17 +914,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: '#F59E0B',
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 12,
     shadowColor: '#F59E0B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   quickActionText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700' as const,
     color: 'white',
   },
