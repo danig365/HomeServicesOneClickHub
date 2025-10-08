@@ -189,6 +189,29 @@ export default function LoginScreen() {
     }
   };
 
+  const handleAdminDemoMode = async () => {
+    clearError();
+    setLocalError(null);
+    console.log('[Login] Entering admin demo mode - bypassing authentication');
+    const demoAdminUser: any = {
+      id: 'demo-admin-123',
+      email: 'admin-demo@hudson.com',
+      name: 'Demo Administrator',
+      phone: '555-0300',
+      role: 'admin' as const,
+      createdAt: new Date().toISOString(),
+    };
+    const demoToken = 'demo-admin-token-' + Date.now();
+    
+    try {
+      await setDemoMode(demoAdminUser, demoToken);
+      console.log('[Login] Admin demo mode activated');
+    } catch (err) {
+      console.error('[Login] Failed to set admin demo mode:', err);
+      setLocalError('Failed to enter admin demo mode');
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -338,6 +361,14 @@ export default function LoginScreen() {
               disabled={isLoading}
             >
               <Text style={styles.techDemoButtonText}>🔧 Tech Portal Demo (No Backend)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.adminDemoButton}
+              onPress={handleAdminDemoMode}
+              disabled={isLoading}
+            >
+              <Text style={styles.adminDemoButtonText}>👑 Admin Portal Demo (No Backend)</Text>
             </TouchableOpacity>
 
             {backendStatus === 'online' && (
@@ -597,6 +628,21 @@ const styles = StyleSheet.create({
     borderColor: '#D97706',
   },
   techDemoButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700' as const,
+  },
+  adminDemoButton: {
+    backgroundColor: '#DC2626',
+    height: 56,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#B91C1C',
+  },
+  adminDemoButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '700' as const,
