@@ -1,14 +1,15 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform, Image, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform, Image, Modal, TextInput } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Icons from 'lucide-react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Audio } from 'expo-av';
 import { useProperties } from '@/hooks/properties-store';
 import { useSnapshots } from '@/hooks/snapshot-store';
 import { useUser } from '@/hooks/user-store';
 import { COLORS } from '@/constants/colors';
-import { MediaNote } from '@/types/tech-appointment';
+import { MediaNote, ApplianceDetail } from '@/types/tech-appointment';
 
 const COMMON_ROOMS = [
   { id: 'kitchen', name: 'Kitchen', icon: 'ChefHat', color: '#F59E0B' },
@@ -29,6 +30,10 @@ interface RoomProgress {
   icon: string;
   color: string;
   photos: MediaNote[];
+  audioNotes: MediaNote[];
+  notes: string;
+  score: number;
+  appliances: ApplianceDetail[];
   completed: boolean;
 }
 
@@ -46,6 +51,10 @@ export default function QuickStartSnapshotScreen() {
     COMMON_ROOMS.map(room => ({
       ...room,
       photos: [],
+      audioNotes: [],
+      notes: '',
+      score: 85,
+      appliances: [],
       completed: false,
     }))
   );
@@ -55,6 +64,11 @@ export default function QuickStartSnapshotScreen() {
   const [cameraFacing, setCameraFacing] = useState<'back' | 'front'>('back');
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const cameraRef = useRef<any>(null);
+
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingInstance, setRecordingInstance] = useState<Audio.Recording | null>(null);
+  const [audioPermission, setAudioPermission] = useState<boolean | null>(null);
 
   const currentRoom = rooms[currentRoomIndex];
   const totalPhotos = rooms.reduce((sum, room) => sum + room.photos.length, 0);
@@ -71,6 +85,129 @@ export default function QuickStartSnapshotScreen() {
       console.error('Failed to create snapshot:', error);
       Alert.alert('Error', 'Failed to initialize snapshot');
       return null;
+    }
+  };
+
+  const requestAudioPermission = async () => {
+    if (Platform.OS === 'web') {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        setAudioPermission(true);
+        return true;
+      } catch (error) {
+        console.error('Audio permission denied:', error);
+        setAudioPermission(false);
+        return false;
+      }
+    } else {
+      try {
+        const { status } = await Audio.requestPermissionsAsync();
+        const granted = status === 'granted';
+        setAudioPermission(granted);
+        return granted;
+      } catch (error) {
+        console.error('Failed to request audio permission:', error);
+        setAudioPermission(false);
+        return false;
+      }
+    }
+  };
+
+  const handleStartRecording = async () => {
+    console.log('[QuickStart] Starting audio recording');
+
+    if (audioPermission === null) {
+      const granted = await requestAudioPermission();
+      if (!granted) {
+        Alert.alert('Permission Required', 'Microphone permission is required to record audio notes');
+        return;
+      }
+    } else if (!audioPermission) {
+      Alert.alert('Permission Required', 'Microphone permission is required to record audio notes');
+      return;
+    }
+
+    if (Platform.OS === 'web') {
+      Alert.alert('Not Supported', 'Audio recording is not supported on web');
+      return;
+    }
+
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync({
+        android: {
+          extension: '.m4a',
+          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+          audioEncoder: Audio.AndroidAudioEncoder.AAC,
+          sampleRate: 44100,
+          numberOfChannels: 2,
+          bitRate: 128000,
+        },
+        ios: {
+          extension: '.wav',
+          outputFormat: Audio.IOSOutputFormat.LINEARPCM,
+          audioQuality: Audio.IOSAudioQuality.HIGH,
+          sampleRate: 44100,
+          numberOfChannels: 2,
+          bitRate: 128000,
+          linearPCMBitDepth: 16,
+          linearPCMIsBigEndian: false,
+          linearPCMIsFloat: false,
+        },
+        web: {},
+      });
+
+      await recording.startAsync();
+      setRecordingInstance(recording);
+      setIsRecording(true);
+      console.log('[QuickStart] Recording started');
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      Alert.alert('Error', 'Failed to start audio recording');
+    }
+  };
+
+  const handleStopRecording = async () => {
+    if (!recordingInstance) return;
+
+    console.log('[QuickStart] Stopping audio recording');
+
+    try {
+      await recordingInstance.stopAndUnloadAsync();
+      const uri = recordingInstance.getURI();
+
+      if (Platform.OS !== 'web') {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+        });
+      }
+
+      if (uri) {
+        const newAudioNote: MediaNote = {
+          id: `audio-${Date.now()}`,
+          type: 'audio' as const,
+          uri,
+          timestamp: new Date().toISOString(),
+        };
+
+        const updatedRooms = [...rooms];
+        updatedRooms[currentRoomIndex].audioNotes.push(newAudioNote);
+        setRooms(updatedRooms);
+
+        Alert.alert('Success', 'Audio note saved!');
+      }
+
+      setRecordingInstance(null);
+      setIsRecording(false);
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
+      Alert.alert('Error', 'Failed to save audio recording');
+      setIsRecording(false);
     }
   };
 
@@ -148,44 +285,94 @@ export default function QuickStartSnapshotScreen() {
     updatedRooms[currentRoomIndex].photos.push(newPhoto);
     setRooms(updatedRooms);
 
+    setCapturedPhoto(null);
+    setShowCamera(false);
+
+    Alert.alert(
+      'Photo Saved!',
+      `Photo added to ${currentRoom.name}. Take another photo or continue?`,
+      [
+        { text: 'Take Another', onPress: () => setShowCamera(true) },
+        { text: 'Continue', onPress: () => {} },
+      ]
+    );
+  };
+
+  const handleUpdateRoomNotes = (notes: string) => {
+    const updatedRooms = [...rooms];
+    updatedRooms[currentRoomIndex].notes = notes;
+    setRooms(updatedRooms);
+  };
+
+  const handleUpdateRoomScore = (score: number) => {
+    const updatedRooms = [...rooms];
+    updatedRooms[currentRoomIndex].score = score;
+    setRooms(updatedRooms);
+  };
+
+  const handleAddAppliance = () => {
+    const updatedRooms = [...rooms];
+    const newAppliance: ApplianceDetail = {
+      id: `appliance-${Date.now()}`,
+      name: '',
+      serialNumber: '',
+      modelNumber: '',
+      filterType: '',
+      filterSize: '',
+      notes: '',
+    };
+    updatedRooms[currentRoomIndex].appliances.push(newAppliance);
+    setRooms(updatedRooms);
+  };
+
+  const handleUpdateAppliance = (applianceId: string, field: keyof ApplianceDetail, value: string) => {
+    const updatedRooms = [...rooms];
+    const appliance = updatedRooms[currentRoomIndex].appliances.find(a => a.id === applianceId);
+    if (appliance) {
+      (appliance as any)[field] = value;
+      setRooms(updatedRooms);
+    }
+  };
+
+  const handleRemoveAppliance = (applianceId: string) => {
+    const updatedRooms = [...rooms];
+    updatedRooms[currentRoomIndex].appliances = updatedRooms[currentRoomIndex].appliances.filter(
+      a => a.id !== applianceId
+    );
+    setRooms(updatedRooms);
+  };
+
+  const handleMarkRoomComplete = async () => {
+    if (currentRoom.photos.length === 0) {
+      Alert.alert('No Photos', 'Please take at least one photo before marking as complete');
+      return;
+    }
+
+    if (!snapshotId) {
+      const snapId = await initializeSnapshot();
+      if (!snapId) return;
+    }
+
+    const updatedRooms = [...rooms];
+    updatedRooms[currentRoomIndex].completed = true;
+    setRooms(updatedRooms);
+
     const roomData = updatedRooms[currentRoomIndex];
-    const existingRoom = await addRoomInspection(snapshotId, {
+    await addRoomInspection(snapshotId!, {
       roomName: roomData.name,
       roomType: roomData.id.includes('bedroom') ? 'bedroom' : 
                 roomData.id.includes('bathroom') ? 'bathroom' :
                 roomData.id.includes('kitchen') ? 'kitchen' :
                 roomData.id.includes('living') ? 'living' :
                 roomData.id.includes('garage') ? 'garage' : 'other',
-      score: 85,
-      notes: '',
+      score: roomData.score,
+      notes: roomData.notes,
       images: roomData.photos,
-      audioNotes: [],
+      audioNotes: roomData.audioNotes,
       issues: [],
       recommendations: [],
+      appliances: roomData.appliances,
     });
-
-    setCapturedPhoto(null);
-    setShowCamera(false);
-
-    Alert.alert(
-      'Photo Saved!',
-      `Photo added to ${currentRoom.name}. Take another photo or move to next room?`,
-      [
-        { text: 'Take Another', onPress: () => setShowCamera(true) },
-        { text: 'Next Room', onPress: handleNextRoom },
-      ]
-    );
-  };
-
-  const handleMarkRoomComplete = () => {
-    if (currentRoom.photos.length === 0) {
-      Alert.alert('No Photos', 'Please take at least one photo before marking as complete');
-      return;
-    }
-
-    const updatedRooms = [...rooms];
-    updatedRooms[currentRoomIndex].completed = true;
-    setRooms(updatedRooms);
 
     handleNextRoom();
   };
@@ -300,7 +487,7 @@ export default function QuickStartSnapshotScreen() {
         <View style={styles.instructionCard}>
           <Icons.Info size={20} color="#3B82F6" />
           <Text style={styles.instructionText}>
-            Take photos of key areas in {currentRoom.name}. Capture overall views and any areas of concern.
+            Document {currentRoom.name} with photos, audio notes, and appliance details.
           </Text>
         </View>
 
@@ -325,6 +512,22 @@ export default function QuickStartSnapshotScreen() {
               <Text style={styles.emptySubtext}>Tap the camera button below to start</Text>
             </View>
           )}
+        </View>
+
+        <View style={styles.detailsSection}>
+          <TouchableOpacity
+            style={styles.detailsButton}
+            onPress={() => setShowDetailsModal(true)}
+          >
+            <Icons.FileText size={20} color={COLORS.teal} />
+            <View style={styles.detailsButtonContent}>
+              <Text style={styles.detailsButtonTitle}>Room Details</Text>
+              <Text style={styles.detailsButtonSubtitle}>
+                {currentRoom.audioNotes.length} audio • Score: {currentRoom.score} • {currentRoom.appliances.length} appliances
+              </Text>
+            </View>
+            <Icons.ChevronRight size={20} color="#9CA3AF" />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.roomGrid}>
@@ -466,6 +669,186 @@ export default function QuickStartSnapshotScreen() {
           )}
         </View>
       </Modal>
+
+      <Modal
+        visible={showDetailsModal}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setShowDetailsModal(false)}
+      >
+        <View style={[styles.modalContainer, { paddingTop: insets.top }]}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowDetailsModal(false)}>
+              <Icons.X size={24} color="#111827" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>{currentRoom.name} Details</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>Room Score</Text>
+              <View style={styles.scoreContainer}>
+                <TouchableOpacity
+                  style={styles.scoreButton}
+                  onPress={() => handleUpdateRoomScore(Math.max(0, currentRoom.score - 5))}
+                >
+                  <Icons.Minus size={20} color="white" />
+                </TouchableOpacity>
+                <View style={styles.scoreDisplay}>
+                  <Text style={styles.scoreValue}>{currentRoom.score}</Text>
+                  <Text style={styles.scoreLabel}>out of 100</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.scoreButton}
+                  onPress={() => handleUpdateRoomScore(Math.min(100, currentRoom.score + 5))}
+                >
+                  <Icons.Plus size={20} color="white" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>Audio Notes ({currentRoom.audioNotes.length})</Text>
+              {Platform.OS !== 'web' && (
+                <TouchableOpacity
+                  style={[styles.audioButton, isRecording && styles.audioButtonRecording]}
+                  onPress={isRecording ? handleStopRecording : handleStartRecording}
+                >
+                  {isRecording ? (
+                    <>
+                      <Icons.Square size={20} color="white" />
+                      <Text style={styles.audioButtonText}>Stop Recording</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Icons.Mic size={20} color="white" />
+                      <Text style={styles.audioButtonText}>Record Audio Note</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+              {currentRoom.audioNotes.length > 0 && (
+                <View style={styles.audioList}>
+                  {currentRoom.audioNotes.map((audio, index) => (
+                    <View key={audio.id} style={styles.audioItem}>
+                      <Icons.Volume2 size={16} color={COLORS.teal} />
+                      <Text style={styles.audioItemText}>Audio Note #{index + 1}</Text>
+                      <Text style={styles.audioItemTime}>
+                        {new Date(audio.timestamp).toLocaleTimeString()}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>Notes</Text>
+              <TextInput
+                style={styles.notesInput}
+                placeholder="Add notes about this room..."
+                placeholderTextColor="#9CA3AF"
+                multiline
+                numberOfLines={4}
+                value={currentRoom.notes}
+                onChangeText={handleUpdateRoomNotes}
+              />
+            </View>
+
+            <View style={styles.modalSection}>
+              <View style={styles.modalSectionHeader}>
+                <Text style={styles.modalSectionTitle}>Appliances ({currentRoom.appliances.length})</Text>
+                <TouchableOpacity style={styles.addButton} onPress={handleAddAppliance}>
+                  <Icons.Plus size={16} color="white" />
+                  <Text style={styles.addButtonText}>Add</Text>
+                </TouchableOpacity>
+              </View>
+
+              {currentRoom.appliances.map((appliance) => (
+                <View key={appliance.id} style={styles.applianceCard}>
+                  <View style={styles.applianceHeader}>
+                    <Icons.Package size={20} color={COLORS.teal} />
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleRemoveAppliance(appliance.id)}
+                    >
+                      <Icons.Trash2 size={16} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <TextInput
+                    style={styles.applianceInput}
+                    placeholder="Appliance Name (e.g., HVAC Unit)"
+                    placeholderTextColor="#9CA3AF"
+                    value={appliance.name}
+                    onChangeText={(text) => handleUpdateAppliance(appliance.id, 'name', text)}
+                  />
+
+                  <View style={styles.applianceRow}>
+                    <TextInput
+                      style={[styles.applianceInput, styles.applianceInputHalf]}
+                      placeholder="Serial Number"
+                      placeholderTextColor="#9CA3AF"
+                      value={appliance.serialNumber}
+                      onChangeText={(text) => handleUpdateAppliance(appliance.id, 'serialNumber', text)}
+                    />
+                    <TextInput
+                      style={[styles.applianceInput, styles.applianceInputHalf]}
+                      placeholder="Model Number"
+                      placeholderTextColor="#9CA3AF"
+                      value={appliance.modelNumber}
+                      onChangeText={(text) => handleUpdateAppliance(appliance.id, 'modelNumber', text)}
+                    />
+                  </View>
+
+                  <View style={styles.applianceRow}>
+                    <TextInput
+                      style={[styles.applianceInput, styles.applianceInputHalf]}
+                      placeholder="Filter Type"
+                      placeholderTextColor="#9CA3AF"
+                      value={appliance.filterType}
+                      onChangeText={(text) => handleUpdateAppliance(appliance.id, 'filterType', text)}
+                    />
+                    <TextInput
+                      style={[styles.applianceInput, styles.applianceInputHalf]}
+                      placeholder="Filter Size"
+                      placeholderTextColor="#9CA3AF"
+                      value={appliance.filterSize}
+                      onChangeText={(text) => handleUpdateAppliance(appliance.id, 'filterSize', text)}
+                    />
+                  </View>
+
+                  <TextInput
+                    style={styles.applianceInput}
+                    placeholder="Additional Notes"
+                    placeholderTextColor="#9CA3AF"
+                    value={appliance.notes}
+                    onChangeText={(text) => handleUpdateAppliance(appliance.id, 'notes', text)}
+                  />
+                </View>
+              ))}
+
+              {currentRoom.appliances.length === 0 && (
+                <View style={styles.emptyAppliances}>
+                  <Icons.Package size={32} color="#D1D5DB" />
+                  <Text style={styles.emptyAppliancesText}>No appliances added</Text>
+                </View>
+              )}
+            </View>
+          </ScrollView>
+
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={styles.modalSaveButton}
+              onPress={() => setShowDetailsModal(false)}
+            >
+              <Icons.Check size={20} color="white" />
+              <Text style={styles.modalSaveButtonText}>Save Details</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -605,6 +988,33 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 13,
     color: '#9CA3AF',
+  },
+  detailsSection: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  detailsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  detailsButtonContent: {
+    flex: 1,
+  },
+  detailsButtonTitle: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: '#111827',
+    marginBottom: 4,
+  },
+  detailsButtonSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
   },
   roomGrid: {
     padding: 16,
@@ -852,6 +1262,196 @@ const styles = StyleSheet.create({
   cameraPermissionButtonText: {
     fontSize: 16,
     fontWeight: '600' as const,
+    color: 'white',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: COLORS.cream,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: '#111827',
+  },
+  modalContent: {
+    flex: 1,
+  },
+  modalSection: {
+    padding: 16,
+    backgroundColor: 'white',
+    marginBottom: 12,
+  },
+  modalSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: '#111827',
+    marginBottom: 12,
+  },
+  modalSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  scoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 24,
+  },
+  scoreButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.teal,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreDisplay: {
+    alignItems: 'center',
+    minWidth: 100,
+  },
+  scoreValue: {
+    fontSize: 48,
+    fontWeight: '800' as const,
+    color: COLORS.teal,
+  },
+  scoreLabel: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  audioButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.teal,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  audioButtonRecording: {
+    backgroundColor: '#EF4444',
+  },
+  audioButtonText: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: 'white',
+  },
+  audioList: {
+    gap: 8,
+  },
+  audioItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F3F4F6',
+    padding: 12,
+    borderRadius: 8,
+  },
+  audioItemText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: '#111827',
+  },
+  audioItemTime: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  notesInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 15,
+    color: '#111827',
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.teal,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  addButtonText: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: 'white',
+  },
+  applianceCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    gap: 12,
+  },
+  applianceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  removeButton: {
+    padding: 4,
+  },
+  applianceInput: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+    color: '#111827',
+  },
+  applianceRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  applianceInputHalf: {
+    flex: 1,
+  },
+  emptyAppliances: {
+    alignItems: 'center',
+    padding: 32,
+    gap: 8,
+  },
+  emptyAppliancesText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
+  modalFooter: {
+    backgroundColor: 'white',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  modalSaveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.teal,
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  modalSaveButtonText: {
+    fontSize: 16,
+    fontWeight: '700' as const,
     color: 'white',
   },
 });

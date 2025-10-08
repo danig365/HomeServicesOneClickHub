@@ -10,6 +10,17 @@ export interface MediaNote {
   location?: string;
 }
 
+export interface ApplianceDetail {
+  id: string;
+  name: string;
+  serialNumber?: string;
+  modelNumber?: string;
+  filterType?: string;
+  filterSize?: string;
+  lastServiceDate?: string;
+  notes?: string;
+}
+
 export interface RoomInspection {
   id: string;
   roomName: string;
@@ -20,6 +31,7 @@ export interface RoomInspection {
   audioNotes: MediaNote[];
   issues: string[];
   recommendations: string[];
+  appliances?: ApplianceDetail[];
 }
 
 export interface SnapshotInspection {
