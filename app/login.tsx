@@ -15,7 +15,6 @@ import { useAuth } from '@/hooks/auth-store';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Lock, Mail, Wifi, WifiOff } from 'lucide-react-native';
 import Constants from 'expo-constants';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const TEAL = '#14B8A6';
 const CREAM = '#FFF8E7';
@@ -26,7 +25,7 @@ export default function LoginScreen() {
   const { login, error, clearError, isLoading, setDemoMode } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline' | 'e2b-mobile'>('checking');
+  const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [backendUrl, setBackendUrl] = useState<string>('');
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -63,14 +62,6 @@ export default function LoginScreen() {
   };
 
   const checkBackendConnection = useCallback(async () => {
-    const debuggerHost = Constants.expoConfig?.hostUri;
-    if (Platform.OS !== 'web' && debuggerHost && debuggerHost.includes('.e2b.app')) {
-      console.warn('[Login] E2B environment detected on mobile - backend not accessible');
-      setBackendStatus('e2b-mobile');
-      setBackendUrl('E2B Environment');
-      return;
-    }
-
     const baseUrl = getBaseUrl();
     setBackendUrl(baseUrl);
     console.log('[Login] Checking backend connection at:', baseUrl);
@@ -214,7 +205,6 @@ export default function LoginScreen() {
               styles.statusContainer,
               backendStatus === 'online' ? styles.statusOnline : 
               backendStatus === 'offline' ? styles.statusOffline : 
-              backendStatus === 'e2b-mobile' ? styles.statusOffline :
               styles.statusChecking
             ]}>
               {backendStatus === 'checking' ? (
@@ -227,27 +217,9 @@ export default function LoginScreen() {
               <Text style={styles.statusText}>
                 {backendStatus === 'checking' ? 'Checking server...' :
                  backendStatus === 'online' ? 'Server connected' :
-                 backendStatus === 'e2b-mobile' ? 'E2B not accessible on mobile' :
                  'Server offline'}
               </Text>
             </View>
-
-            {backendStatus === 'e2b-mobile' && (
-              <View style={styles.e2bWarningContainer}>
-                <Text style={styles.e2bWarningTitle}>🚧 E2B Environment Limitation</Text>
-                <Text style={styles.e2bWarningText}>
-                  You're running this app from an E2B cloud environment, which is only accessible through the web preview.
-                </Text>
-                <Text style={styles.e2bWarningText}>
-                  The backend server cannot be reached from your iOS device.
-                </Text>
-                <Text style={[styles.e2bWarningTitle, { marginTop: 12, fontSize: 13 }]}>✅ To test on mobile:</Text>
-                <Text style={styles.e2bWarningText}>• Use the web preview in your browser</Text>
-                <Text style={styles.e2bWarningText}>• Deploy your backend to a public URL</Text>
-                <Text style={styles.e2bWarningText}>• Use a tunnel service (ngrok, cloudflare)</Text>
-                <Text style={styles.e2bWarningText}>• Run locally and set EXPO_PUBLIC_RORK_API_BASE_URL</Text>
-              </View>
-            )}
 
             {backendStatus === 'offline' && (
               <View style={styles.warningContainer}>
@@ -321,9 +293,9 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.loginButton, (isLoading || backendStatus === 'e2b-mobile') && styles.loginButtonDisabled]}
+              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
               onPress={handleLogin}
-              disabled={isLoading || !email || !password || backendStatus === 'e2b-mobile'}
+              disabled={isLoading || !email || !password}
             >
               {isLoading ? (
                 <ActivityIndicator color={CREAM} />
@@ -358,7 +330,7 @@ export default function LoginScreen() {
               <Text style={styles.techDemoButtonText}>🔧 Tech Portal Demo (No Backend)</Text>
             </TouchableOpacity>
 
-            {backendStatus !== 'e2b-mobile' && backendStatus === 'online' && (
+            {backendStatus === 'online' && (
               <TouchableOpacity
                 style={styles.bypassButton}
                 onPress={handleBypassLogin}
@@ -618,25 +590,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '700' as const,
-  },
-  e2bWarningContainer: {
-    backgroundColor: '#DBEAFE',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#3B82F6',
-  },
-  e2bWarningTitle: {
-    color: '#1E40AF',
-    fontSize: 14,
-    fontWeight: '700' as const,
-    marginBottom: 8,
-  },
-  e2bWarningText: {
-    color: '#1E40AF',
-    fontSize: 12,
-    marginBottom: 4,
-    lineHeight: 18,
   },
 });
