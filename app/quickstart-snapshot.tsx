@@ -59,6 +59,8 @@ export default function QuickStartSnapshotScreen() {
     }))
   );
   const [currentRoomIndex, setCurrentRoomIndex] = useState(0);
+  const [overallNotes, setOverallNotes] = useState('');
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [cameraFacing, setCameraFacing] = useState<'back' | 'front'>('back');
@@ -413,27 +415,31 @@ export default function QuickStartSnapshotScreen() {
       return;
     }
 
-    Alert.alert(
-      'Complete QuickStart',
-      `You've captured ${totalPhotos} photos across ${completedRooms} rooms. Complete this snapshot?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Complete',
-          onPress: async () => {
-            try {
-              await completeSnapshot(snapshotId);
-              Alert.alert('Success', 'QuickStart snapshot completed!', [
-                { text: 'OK', onPress: () => router.back() }
-              ]);
-            } catch (error) {
-              console.error('Failed to complete snapshot:', error);
-              Alert.alert('Error', 'Failed to complete snapshot');
-            }
-          },
-        },
-      ]
-    );
+    setShowCompletionModal(true);
+  };
+
+  const handleFinalizeSnapshot = async () => {
+    if (!snapshotId) return;
+
+    try {
+      await completeSnapshot(snapshotId);
+      setShowCompletionModal(false);
+      
+      Alert.alert(
+        'QuickStart Complete!',
+        `Snapshot saved with ${totalPhotos} photos across ${completedRooms} rooms. The report is now available in the property blueprint.`,
+        [
+          { text: 'View Blueprint', onPress: () => {
+            router.back();
+            setTimeout(() => router.push('/blueprint' as any), 300);
+          }},
+          { text: 'Done', onPress: () => router.back() }
+        ]
+      );
+    } catch (error) {
+      console.error('Failed to complete snapshot:', error);
+      Alert.alert('Error', 'Failed to complete snapshot');
+    }
   };
 
   const getIconComponent = (iconName: string) => {
@@ -667,6 +673,86 @@ export default function QuickStartSnapshotScreen() {
               </TouchableOpacity>
             </View>
           )}
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showCompletionModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCompletionModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.completionModalContent}>
+            <View style={styles.completionHeader}>
+              <Icons.CheckCircle size={48} color="#10B981" />
+              <Text style={styles.completionTitle}>Review QuickStart Report</Text>
+              <Text style={styles.completionSubtitle}>
+                {totalPhotos} photos • {completedRooms} rooms completed
+              </Text>
+            </View>
+
+            <ScrollView style={styles.completionScroll}>
+              <View style={styles.completionSection}>
+                <Text style={styles.completionSectionTitle}>Overall Notes</Text>
+                <TextInput
+                  style={styles.completionNotesInput}
+                  placeholder="Add overall notes about this property inspection..."
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  numberOfLines={4}
+                  value={overallNotes}
+                  onChangeText={setOverallNotes}
+                />
+              </View>
+
+              <View style={styles.completionSection}>
+                <Text style={styles.completionSectionTitle}>Room Summary</Text>
+                {rooms.filter(r => r.completed).map(room => (
+                  <View key={room.id} style={styles.completionRoomCard}>
+                    <View style={styles.completionRoomHeader}>
+                      <Text style={styles.completionRoomName}>{room.name}</Text>
+                      <View style={styles.completionRoomBadge}>
+                        <Icons.Camera size={12} color={COLORS.gold} />
+                        <Text style={styles.completionRoomBadgeText}>{room.photos.length}</Text>
+                      </View>
+                    </View>
+                    {room.notes && (
+                      <Text style={styles.completionRoomNotes} numberOfLines={2}>{room.notes}</Text>
+                    )}
+                    {room.appliances.length > 0 && (
+                      <Text style={styles.completionRoomMeta}>
+                        {room.appliances.length} appliance{room.appliances.length !== 1 ? 's' : ''} documented
+                      </Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.completionInfo}>
+                <Icons.Info size={16} color="#3B82F6" />
+                <Text style={styles.completionInfoText}>
+                  This report will be saved to the property's blueprint and shared with the homeowner.
+                </Text>
+              </View>
+            </ScrollView>
+
+            <View style={styles.completionActions}>
+              <TouchableOpacity
+                style={styles.completionCancelButton}
+                onPress={() => setShowCompletionModal(false)}
+              >
+                <Text style={styles.completionCancelButtonText}>Back to Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.completionSubmitButton}
+                onPress={handleFinalizeSnapshot}
+              >
+                <Icons.Check size={20} color="white" />
+                <Text style={styles.completionSubmitButtonText}>Complete & Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
 
@@ -1451,6 +1537,149 @@ const styles = StyleSheet.create({
   },
   modalSaveButtonText: {
     fontSize: 16,
+    fontWeight: '700' as const,
+    color: 'white',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  completionModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 24,
+    width: '100%',
+    maxHeight: '90%',
+    overflow: 'hidden',
+  },
+  completionHeader: {
+    alignItems: 'center',
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    gap: 8,
+  },
+  completionTitle: {
+    fontSize: 22,
+    fontWeight: '800' as const,
+    color: '#111827',
+  },
+  completionSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  completionScroll: {
+    maxHeight: 400,
+  },
+  completionSection: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  completionSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: '#111827',
+    marginBottom: 12,
+  },
+  completionNotesInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 15,
+    color: '#111827',
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  completionRoomCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  completionRoomHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  completionRoomName: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: '#111827',
+  },
+  completionRoomBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.gold + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  completionRoomBadgeText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: COLORS.gold,
+  },
+  completionRoomNotes: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  completionRoomMeta: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  completionInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 20,
+    backgroundColor: '#EFF6FF',
+  },
+  completionInfoText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1E40AF',
+    lineHeight: 18,
+  },
+  completionActions: {
+    flexDirection: 'row',
+    padding: 20,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  completionCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  completionCancelButtonText: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: '#6B7280',
+  },
+  completionSubmitButton: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#10B981',
+  },
+  completionSubmitButtonText: {
+    fontSize: 15,
     fontWeight: '700' as const,
     color: 'white',
   },

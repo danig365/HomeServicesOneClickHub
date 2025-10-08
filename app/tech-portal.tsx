@@ -122,31 +122,40 @@ export default function TechPortalScreen() {
           <Text style={styles.quickActionsTitle}>Quick Actions</Text>
           <View style={styles.quickActionsRow}>
             <TouchableOpacity
-              style={styles.quickActionCard}
-              onPress={() => router.push('/tech-properties-view' as any)}
-            >
-              <View style={styles.quickActionIconContainer}>
-                <Icons.Building2 size={28} color={COLORS.teal} />
-              </View>
-              <Text style={styles.quickActionTitle}>Properties</Text>
-              <Text style={styles.quickActionSubtitle}>View all properties</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
               style={[styles.quickActionCard, styles.quickActionCardHighlight]}
               onPress={() => {
                 if (properties.length === 1) {
                   handleQuickStartSnapshot(properties[0]);
+                } else if (properties.length > 1) {
+                  Alert.alert(
+                    'Select Property',
+                    'Choose a property to start QuickStart',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'View Properties', onPress: () => router.push('/tech-properties-view' as any) }
+                    ]
+                  );
                 } else {
-                  router.push('/tech-properties-view' as any);
+                  Alert.alert('No Properties', 'No properties available for QuickStart');
                 }
               }}
             >
               <View style={[styles.quickActionIconContainer, styles.quickActionIconHighlight]}>
-                <Icons.Zap size={28} color="white" />
+                <Icons.Zap size={32} color="white" />
               </View>
               <Text style={[styles.quickActionTitle, styles.quickActionTitleHighlight]}>QuickStart</Text>
-              <Text style={[styles.quickActionSubtitle, styles.quickActionSubtitleHighlight]}>Room-by-room photos</Text>
+              <Text style={[styles.quickActionSubtitle, styles.quickActionSubtitleHighlight]}>Room-by-room inspection</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => router.push('/tech-properties-view' as any)}
+            >
+              <View style={styles.quickActionIconContainer}>
+                <Icons.Building2 size={32} color={COLORS.teal} />
+              </View>
+              <Text style={styles.quickActionTitle}>Properties</Text>
+              <Text style={styles.quickActionSubtitle}>View all properties</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -47,8 +47,11 @@ export default function TechPropertiesViewScreen() {
     if (!properties || properties.length === 0) return [];
     
     return properties.map(property => {
-      let propertyAppointments = getAppointmentsByProperty(property.id) || [];
-      let propertySnapshots = getSnapshotsByProperty(property.id) || [];
+      const appointmentsResult = getAppointmentsByProperty(property.id);
+      const snapshotsResult = getSnapshotsByProperty(property.id);
+      
+      let propertyAppointments = Array.isArray(appointmentsResult) ? appointmentsResult : [];
+      let propertySnapshots = Array.isArray(snapshotsResult) ? snapshotsResult : [];
 
       if (techId) {
         propertyAppointments = propertyAppointments.filter(apt => apt.techId === techId);
