@@ -28,6 +28,13 @@ const getBaseUrl = () => {
   if (debuggerHost) {
     console.log('[tRPC] Raw hostUri:', debuggerHost);
     
+    if (debuggerHost.includes('.rork.live')) {
+      const host = debuggerHost.split(':')[0];
+      const url = `https://${host}`;
+      console.log('[tRPC] Rork.live tunnel detected, using URL:', url);
+      return url;
+    }
+    
     if (debuggerHost.includes('.e2b.app')) {
       const parts = debuggerHost.split('-');
       if (parts.length >= 2) {
