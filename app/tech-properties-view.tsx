@@ -62,8 +62,8 @@ export default function TechPropertiesViewScreen() {
       const subscription = getSubscription(property.id);
       const blueprint = subscription?.blueprint;
       const hasBlueprint = !!blueprint;
-      const blueprintItemsCount = blueprint?.fiveYearPlan?.items.length || 0;
-      const clientRequestsCount = (blueprint?.customProjects.length || 0) + (blueprint?.monthlyVisitRequests.length || 0);
+      const blueprintItemsCount = blueprint?.fiveYearPlan?.items?.length || 0;
+      const clientRequestsCount = (blueprint?.customProjects?.length || 0) + (blueprint?.monthlyVisitRequests?.length || 0);
 
       return {
         property,
