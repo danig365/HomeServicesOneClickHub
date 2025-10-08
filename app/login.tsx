@@ -47,15 +47,14 @@ export default function LoginScreen() {
       
       const host = debuggerHost.split(':')[0];
       
-      if (debuggerHost.includes('tunnel.dev') || debuggerHost.includes('ngrok') || debuggerHost.includes('.trycloudflare.com')) {
-        return `https://${host}`;
+      if (host.includes('.e2b.app')) {
+        const url = `https://${host}`;
+        console.log('[Login] E2B environment detected, using full host:', url);
+        return url;
       }
       
-      if (host.includes('.e2b.app')) {
-        const baseHost = host.replace(/^\d+-/, '');
-        const url = `https://8081-${baseHost}`;
-        console.log('[Login] E2B environment detected, base host:', baseHost, 'final URL:', url);
-        return url;
+      if (debuggerHost.includes('tunnel.dev') || debuggerHost.includes('ngrok') || debuggerHost.includes('.trycloudflare.com')) {
+        return `https://${host}`;
       }
       
       return `http://${host}:8081`;
