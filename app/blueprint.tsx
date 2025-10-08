@@ -1,23 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, SafeAreaView, Modal } from 'react-native';
 import { Stack, router } from 'expo-router';
 import * as Icons from 'lucide-react-native';
 import { useProperties } from '@/hooks/properties-store';
 import { useSubscription } from '@/hooks/subscription-store';
-import { MyHomeBlueprint, CustomProject, MonthlyVisitRequest } from '@/types/subscription';
+import { useUser } from '@/hooks/user-store';
+import { MyHomeBlueprint, CustomProject, MonthlyVisitRequest, BlueprintHistoryEntry } from '@/types/subscription';
 import { COLORS } from '@/constants/colors';
 
 export default function BlueprintScreen() {
   const { getSelectedProperty } = useProperties();
-  const { getSubscription, updateBlueprint, addCustomProject, removeCustomProject, updateCustomProject, addMonthlyVisitRequest, removeMonthlyVisitRequest } = useSubscription();
+  const { getSubscription, updateBlueprint, addCustomProject, removeCustomProject, updateCustomProject, addMonthlyVisitRequest, removeMonthlyVisitRequest, getUnreadNotifications, markNotificationAsRead } = useSubscription();
+  const { currentUser } = useUser();
   const property = getSelectedProperty();
   const subscription = property ? getSubscription(property.id) : null;
   const existingBlueprint = subscription?.blueprint;
 
-  const [mode, setMode] = useState<'view' | 'edit' | 'create'>(existingBlueprint ? 'view' : 'create');
+  const [mode, setMode] = useState<'view' | 'edit' | 'create' | 'history'>(existingBlueprint ? 'view' : 'create');
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [editingProject, setEditingProject] = useState<CustomProject | null>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  const unreadNotifications = useMemo(() => {
+    if (!property || !currentUser) return [];
+    return getUnreadNotifications(property.id, currentUser.role);
+  }, [property, currentUser, getUnreadNotifications]);
 
   const [formData, setFormData] = useState({
     goals: existingBlueprint?.fiveYearGoals.join('\n') || '',
@@ -32,6 +40,7 @@ export default function BlueprintScreen() {
     priority: 'medium' as 'low' | 'medium' | 'high',
     estimatedCost: '',
     targetDate: '',
+    notes: '',
   });
 
   const [requestForm, setRequestForm] = useState({
@@ -42,8 +51,8 @@ export default function BlueprintScreen() {
   });
 
   const handleCreateBlueprint = async () => {
-    if (!property) {
-      Alert.alert('Error', 'No property selected');
+    if (!property || !currentUser) {
+      Alert.alert('Error', 'No property selected or user not logged in');
       return;
     }
 
@@ -53,7 +62,6 @@ export default function BlueprintScreen() {
     }
 
     console.log('[Blueprint] Creating blueprint for property:', property.id);
-    console.log('[Blueprint] Form data:', formData);
 
     const blueprint: MyHomeBlueprint = {
       id: `blueprint-${Date.now()}`,
@@ -66,9 +74,17 @@ export default function BlueprintScreen() {
       monthlyVisitRequests: [],
       budgetRange: formData.budget,
       timeline: formData.timeline,
+      history: [{
+        id: `history-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        action: 'created',
+        description: `${currentUser.name} created the blueprint`,
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userRole: currentUser.role,
+      }],
+      notifications: [],
     };
-
-    console.log('[Blueprint] Blueprint object:', blueprint);
 
     try {
       await updateBlueprint(property.id, blueprint);
@@ -76,13 +92,9 @@ export default function BlueprintScreen() {
       
       Alert.alert(
         'Blueprint Created!',
-        'Your MyHome Blueprint has been saved. Would you like to generate an AI-powered 5-year plan?',
+        'Your MyHome Blueprint has been saved.',
         [
-          { text: 'Later', style: 'cancel', onPress: () => setMode('view') },
-          { text: 'Generate Plan', onPress: () => {
-            setMode('view');
-            router.push({ pathname: '/five-year-plan', params: { propertyId: property.id } });
-          }}
+          { text: 'OK', onPress: () => setMode('view') }
         ]
       );
     } catch (error) {
@@ -92,10 +104,7 @@ export default function BlueprintScreen() {
   };
 
   const handleUpdateBlueprint = async () => {
-    if (!property || !existingBlueprint) return;
-
-    console.log('[Blueprint] Updating blueprint for property:', property.id);
-    console.log('[Blueprint] Form data:', formData);
+    if (!property || !existingBlueprint || !currentUser) return;
 
     const updatedBlueprint: MyHomeBlueprint = {
       ...existingBlueprint,
@@ -106,11 +115,27 @@ export default function BlueprintScreen() {
       updatedAt: new Date().toISOString(),
     };
 
-    console.log('[Blueprint] Updated blueprint object:', updatedBlueprint);
+    const historyEntry: Omit<BlueprintHistoryEntry, 'id' | 'timestamp'> = {
+      action: 'updated',
+      description: `${currentUser.name} updated blueprint goals and priorities`,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userRole: currentUser.role,
+    };
+
+    const notification = {
+      blueprintId: existingBlueprint.id,
+      propertyId: property.id,
+      type: (currentUser.role === 'tech' ? 'tech_update' : 'user_update') as 'tech_update' | 'user_update',
+      message: `${currentUser.name} updated the blueprint`,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userRole: currentUser.role,
+      recipientRole: (currentUser.role === 'tech' ? 'homeowner' : 'tech') as 'tech' | 'homeowner',
+    };
 
     try {
-      await updateBlueprint(property.id, updatedBlueprint);
-      console.log('[Blueprint] Blueprint updated successfully');
+      await updateBlueprint(property.id, updatedBlueprint, historyEntry, notification);
       Alert.alert('Success', 'Blueprint updated successfully');
       setMode('view');
     } catch (error) {
@@ -120,7 +145,7 @@ export default function BlueprintScreen() {
   };
 
   const handleAddProject = async () => {
-    if (!property || !projectForm.title.trim()) {
+    if (!property || !projectForm.title.trim() || !currentUser) {
       Alert.alert('Required', 'Please enter a project title');
       return;
     }
@@ -134,12 +159,15 @@ export default function BlueprintScreen() {
       targetDate: projectForm.targetDate,
       status: 'planned',
       createdAt: new Date().toISOString(),
+      createdBy: currentUser.id,
+      createdByRole: currentUser.role,
+      notes: projectForm.notes,
     };
 
     try {
-      await addCustomProject(property.id, project);
+      await addCustomProject(property.id, project, currentUser.id, currentUser.name, currentUser.role);
       setShowProjectModal(false);
-      setProjectForm({ title: '', description: '', priority: 'medium', estimatedCost: '', targetDate: '' });
+      setProjectForm({ title: '', description: '', priority: 'medium', estimatedCost: '', targetDate: '', notes: '' });
       Alert.alert('Success', 'Project added to your blueprint');
     } catch {
       Alert.alert('Error', 'Failed to add project');
@@ -147,7 +175,7 @@ export default function BlueprintScreen() {
   };
 
   const handleUpdateProject = async () => {
-    if (!property || !editingProject) return;
+    if (!property || !editingProject || !currentUser) return;
 
     try {
       await updateCustomProject(property.id, editingProject.id, {
@@ -156,18 +184,41 @@ export default function BlueprintScreen() {
         priority: projectForm.priority,
         estimatedCost: projectForm.estimatedCost,
         targetDate: projectForm.targetDate,
-      });
+        notes: projectForm.notes,
+      }, currentUser.id, currentUser.name, currentUser.role);
       setShowProjectModal(false);
       setEditingProject(null);
-      setProjectForm({ title: '', description: '', priority: 'medium', estimatedCost: '', targetDate: '' });
+      setProjectForm({ title: '', description: '', priority: 'medium', estimatedCost: '', targetDate: '', notes: '' });
       Alert.alert('Success', 'Project updated');
     } catch {
       Alert.alert('Error', 'Failed to update project');
     }
   };
 
+  const handleCompleteProject = async (projectId: string) => {
+    if (!property || !currentUser) return;
+
+    Alert.alert(
+      'Complete Project',
+      'Mark this project as completed?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Complete',
+          onPress: async () => {
+            await updateCustomProject(property.id, projectId, {
+              status: 'completed',
+              completedDate: new Date().toISOString(),
+            }, currentUser.id, currentUser.name, currentUser.role);
+            Alert.alert('Success', 'Project marked as completed');
+          },
+        },
+      ]
+    );
+  };
+
   const handleDeleteProject = async (projectId: string) => {
-    if (!property) return;
+    if (!property || !currentUser) return;
 
     Alert.alert(
       'Delete Project',
@@ -178,7 +229,7 @@ export default function BlueprintScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            await removeCustomProject(property.id, projectId);
+            await removeCustomProject(property.id, projectId, currentUser.id, currentUser.name, currentUser.role);
             Alert.alert('Success', 'Project removed');
           },
         },
@@ -254,6 +305,7 @@ export default function BlueprintScreen() {
       priority: project.priority,
       estimatedCost: project.estimatedCost || '',
       targetDate: project.targetDate || '',
+      notes: project.notes || '',
     });
     setShowProjectModal(true);
   };
@@ -266,7 +318,115 @@ export default function BlueprintScreen() {
     }
   };
 
+  const getActionIcon = (action: BlueprintHistoryEntry['action']) => {
+    switch (action) {
+      case 'created': return <Icons.FileText size={16} color={COLORS.teal} />;
+      case 'updated': return <Icons.Edit2 size={16} color="#F59E0B" />;
+      case 'project_added': return <Icons.Plus size={16} color="#10B981" />;
+      case 'project_updated': return <Icons.Edit size={16} color="#3B82F6" />;
+      case 'project_completed': return <Icons.CheckCircle size={16} color="#10B981" />;
+      case 'plan_item_added': return <Icons.Calendar size={16} color="#8B5CF6" />;
+      case 'plan_item_updated': return <Icons.CalendarCheck size={16} color="#3B82F6" />;
+      case 'plan_item_completed': return <Icons.CheckCircle2 size={16} color="#10B981" />;
+      default: return <Icons.Circle size={16} color="#6B7280" />;
+    }
+  };
+
+  const handleMarkNotificationRead = async (notificationId: string) => {
+    if (!property) return;
+    await markNotificationAsRead(property.id, notificationId);
+  };
+
+  if (mode === 'history' && existingBlueprint) {
+    const sortedHistory = [...(existingBlueprint.history || [])].sort((a, b) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+
+    return (
+      <SafeAreaView style={styles.container}>
+        <Stack.Screen
+          options={{
+            title: 'Blueprint History',
+            headerStyle: { backgroundColor: COLORS.teal },
+            headerTintColor: COLORS.cream,
+            headerTitleStyle: { fontWeight: '600', fontSize: 17 },
+            headerLeft: () => (
+              <TouchableOpacity onPress={() => setMode('view')} style={{ marginLeft: 8 }}>
+                <Icons.ChevronLeft size={24} color="white" />
+              </TouchableOpacity>
+            ),
+          }}
+        />
+        
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          <View style={styles.historyHeader}>
+            <Icons.History size={32} color={COLORS.teal} />
+            <Text style={styles.historyTitle}>Complete History</Text>
+            <Text style={styles.historySubtitle}>
+              All changes and updates to your blueprint
+            </Text>
+          </View>
+
+          <View style={styles.timelineContainer}>
+            {sortedHistory.map((entry, index) => (
+              <View key={entry.id} style={styles.timelineItem}>
+                <View style={styles.timelineDot}>
+                  {getActionIcon(entry.action)}
+                </View>
+                {index < sortedHistory.length - 1 && <View style={styles.timelineLine} />}
+                
+                <View style={styles.timelineContent}>
+                  <View style={styles.timelineHeader}>
+                    <Text style={styles.timelineDescription}>{entry.description}</Text>
+                    <Text style={styles.timelineDate}>
+                      {new Date(entry.timestamp).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.timelineMeta}>
+                    <View style={[styles.roleBadge, { backgroundColor: entry.userRole === 'tech' ? '#DBEAFE' : '#FEF3C7' }]}>
+                      <Text style={[styles.roleBadgeText, { color: entry.userRole === 'tech' ? '#1E40AF' : '#92400E' }]}>
+                        {entry.userRole === 'tech' ? 'Tech' : entry.userRole === 'admin' ? 'Admin' : 'Homeowner'}
+                      </Text>
+                    </View>
+                    <Text style={styles.timelineTime}>
+                      {new Date(entry.timestamp).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                  </View>
+
+                  {entry.changes && entry.changes.length > 0 && (
+                    <View style={styles.changesContainer}>
+                      {entry.changes.map((change, idx) => (
+                        <View key={idx} style={styles.changeItem}>
+                          <Text style={styles.changeField}>{change.field}:</Text>
+                          <Text style={styles.changeValue}>
+                            {change.oldValue ? `${change.oldValue} → ` : ''}{change.newValue}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   if (mode === 'view' && existingBlueprint) {
+    const recentHistory = [...(existingBlueprint.history || [])]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 5);
+
     return (
       <SafeAreaView style={styles.container}>
         <Stack.Screen
@@ -276,9 +436,19 @@ export default function BlueprintScreen() {
             headerTintColor: COLORS.cream,
             headerTitleStyle: { fontWeight: '600', fontSize: 17 },
             headerRight: () => (
-              <TouchableOpacity onPress={() => setMode('edit')} style={{ marginRight: 8 }}>
-                <Icons.Edit2 size={20} color="white" />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 12, marginRight: 8 }}>
+                <TouchableOpacity onPress={() => setShowNotifications(true)} style={{ position: 'relative' }}>
+                  <Icons.Bell size={20} color="white" />
+                  {unreadNotifications.length > 0 && (
+                    <View style={styles.notificationBadge}>
+                      <Text style={styles.notificationBadgeText}>{unreadNotifications.length}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setMode('edit')}>
+                  <Icons.Edit2 size={20} color="white" />
+                </TouchableOpacity>
+              </View>
             ),
           }}
         />
@@ -286,7 +456,7 @@ export default function BlueprintScreen() {
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.viewHeader}>
             <Icons.FileText size={40} color="#D4AF37" />
-            <Text style={styles.viewTitle}>Your 5-Year Plan</Text>
+            <Text style={styles.viewTitle}>Your Home Care Plan</Text>
             <Text style={styles.viewSubtitle}>
               Last updated {new Date(existingBlueprint.updatedAt).toLocaleDateString()}
             </Text>
@@ -320,13 +490,6 @@ export default function BlueprintScreen() {
             </View>
           )}
 
-          {existingBlueprint.timeline && (
-            <View style={styles.viewSection}>
-              <Text style={styles.viewSectionTitle}>Timeline</Text>
-              <Text style={styles.infoText}>{existingBlueprint.timeline}</Text>
-            </View>
-          )}
-
           <View style={styles.viewSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.viewSectionTitle}>Custom Projects</Text>
@@ -334,7 +497,7 @@ export default function BlueprintScreen() {
                 style={styles.addButton}
                 onPress={() => {
                   setEditingProject(null);
-                  setProjectForm({ title: '', description: '', priority: 'medium', estimatedCost: '', targetDate: '' });
+                  setProjectForm({ title: '', description: '', priority: 'medium', estimatedCost: '', targetDate: '', notes: '' });
                   setShowProjectModal(true);
                 }}
               >
@@ -346,10 +509,21 @@ export default function BlueprintScreen() {
               <Text style={styles.emptyText}>No custom projects yet</Text>
             ) : (
               existingBlueprint.customProjects?.map((project) => (
-                <View key={project.id} style={styles.projectCard}>
+                <View key={project.id} style={[
+                  styles.projectCard,
+                  project.status === 'completed' && styles.projectCardCompleted
+                ]}>
                   <View style={styles.projectHeader}>
                     <View style={styles.projectTitleRow}>
-                      <Text style={styles.projectTitle}>{project.title}</Text>
+                      {project.status === 'completed' && (
+                        <Icons.CheckCircle size={20} color="#10B981" />
+                      )}
+                      <Text style={[
+                        styles.projectTitle,
+                        project.status === 'completed' && styles.projectTitleCompleted
+                      ]}>
+                        {project.title}
+                      </Text>
                       <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(project.priority) + '20' }]}>
                         <Text style={[styles.priorityText, { color: getPriorityColor(project.priority) }]}>
                           {project.priority}
@@ -357,6 +531,11 @@ export default function BlueprintScreen() {
                       </View>
                     </View>
                     <View style={styles.projectActions}>
+                      {project.status !== 'completed' && (
+                        <TouchableOpacity onPress={() => handleCompleteProject(project.id)} style={styles.iconButton}>
+                          <Icons.Check size={16} color="#10B981" />
+                        </TouchableOpacity>
+                      )}
                       <TouchableOpacity onPress={() => openEditProject(project)} style={styles.iconButton}>
                         <Icons.Edit2 size={16} color="#6B7280" />
                       </TouchableOpacity>
@@ -381,7 +560,20 @@ export default function BlueprintScreen() {
                         <Text style={styles.metaText}>{project.targetDate}</Text>
                       </View>
                     )}
+                    {project.createdByRole && (
+                      <View style={styles.metaItem}>
+                        <Icons.User size={14} color="#6B7280" />
+                        <Text style={styles.metaText}>
+                          {project.createdByRole === 'tech' ? 'Tech' : 'Homeowner'}
+                        </Text>
+                      </View>
+                    )}
                   </View>
+                  {project.completedDate && (
+                    <Text style={styles.completedDate}>
+                      Completed {new Date(project.completedDate).toLocaleDateString()}
+                    </Text>
+                  )}
                 </View>
               ))
             )}
@@ -437,6 +629,36 @@ export default function BlueprintScreen() {
                 </View>
               ))
             )}
+          </View>
+
+          <View style={styles.viewSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.viewSectionTitle}>Recent Activity</Text>
+              <TouchableOpacity onPress={() => setMode('history')}>
+                <Text style={styles.viewAllText}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.activityList}>
+              {recentHistory.map((entry, index) => (
+                <View key={entry.id} style={styles.activityItem}>
+                  <View style={styles.activityIcon}>
+                    {getActionIcon(entry.action)}
+                  </View>
+                  <View style={styles.activityContent}>
+                    <Text style={styles.activityDescription}>{entry.description}</Text>
+                    <Text style={styles.activityTime}>
+                      {new Date(entry.timestamp).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
           </View>
 
           <View style={styles.footer}>
@@ -529,6 +751,17 @@ export default function BlueprintScreen() {
                   placeholder="e.g., Summer 2025"
                   placeholderTextColor="#9CA3AF"
                 />
+
+                <Text style={styles.inputLabel}>Notes</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={projectForm.notes}
+                  onChangeText={(text) => setProjectForm(prev => ({ ...prev, notes: text }))}
+                  placeholder="Additional notes..."
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  numberOfLines={3}
+                />
               </ScrollView>
 
               <TouchableOpacity
@@ -620,6 +853,60 @@ export default function BlueprintScreen() {
               <TouchableOpacity style={styles.modalButton} onPress={handleAddRequest}>
                 <Text style={styles.modalButtonText}>Add Request</Text>
               </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={showNotifications}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowNotifications(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Notifications</Text>
+                <TouchableOpacity onPress={() => setShowNotifications(false)}>
+                  <Icons.X size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.modalScroll}>
+                {unreadNotifications.length === 0 ? (
+                  <View style={styles.emptyNotifications}>
+                    <Icons.Bell size={48} color="#D1D5DB" />
+                    <Text style={styles.emptyNotificationsText}>No new notifications</Text>
+                  </View>
+                ) : (
+                  unreadNotifications.map((notif) => (
+                    <TouchableOpacity
+                      key={notif.id}
+                      style={styles.notificationItem}
+                      onPress={() => handleMarkNotificationRead(notif.id)}
+                    >
+                      <View style={styles.notificationIcon}>
+                        {notif.type === 'project_completed' && <Icons.CheckCircle size={20} color="#10B981" />}
+                        {notif.type === 'project_added' && <Icons.Plus size={20} color="#3B82F6" />}
+                        {notif.type === 'user_update' && <Icons.User size={20} color="#F59E0B" />}
+                        {notif.type === 'tech_update' && <Icons.Wrench size={20} color="#8B5CF6" />}
+                        {notif.type === 'plan_modified' && <Icons.Calendar size={20} color="#EC4899" />}
+                      </View>
+                      <View style={styles.notificationContent}>
+                        <Text style={styles.notificationMessage}>{notif.message}</Text>
+                        <Text style={styles.notificationTime}>
+                          {new Date(notif.timestamp).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </ScrollView>
             </View>
           </View>
         </Modal>
@@ -935,6 +1222,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
+  projectCardCompleted: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
   projectHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -952,6 +1243,9 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     color: '#111827',
     flex: 1,
+  },
+  projectTitleCompleted: {
+    color: '#059669',
   },
   priorityBadge: {
     paddingHorizontal: 8,
@@ -979,6 +1273,7 @@ const styles = StyleSheet.create({
   projectMeta: {
     flexDirection: 'row',
     gap: 16,
+    flexWrap: 'wrap',
   },
   metaItem: {
     flexDirection: 'row',
@@ -988,6 +1283,12 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 13,
     color: '#6B7280',
+  },
+  completedDate: {
+    fontSize: 12,
+    color: '#059669',
+    marginTop: 8,
+    fontWeight: '600' as const,
   },
   requestLimit: {
     fontSize: 12,
@@ -1257,5 +1558,199 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700' as const,
     color: 'white',
+  },
+  activityList: {
+    gap: 12,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+  },
+  activityIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityDescription: {
+    fontSize: 14,
+    color: '#111827',
+    marginBottom: 4,
+  },
+  activityTime: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  viewAllText: {
+    fontSize: 14,
+    color: COLORS.teal,
+    fontWeight: '600' as const,
+  },
+  historyHeader: {
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: 'white',
+  },
+  historyTitle: {
+    fontSize: 24,
+    fontWeight: '800' as const,
+    color: '#111827',
+    marginTop: 12,
+  },
+  historySubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  timelineContainer: {
+    padding: 20,
+    backgroundColor: 'white',
+    marginTop: 12,
+  },
+  timelineItem: {
+    position: 'relative',
+    paddingLeft: 40,
+    paddingBottom: 24,
+  },
+  timelineDot: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timelineLine: {
+    position: 'absolute',
+    left: 15,
+    top: 32,
+    bottom: 0,
+    width: 2,
+    backgroundColor: '#E5E7EB',
+  },
+  timelineContent: {
+    flex: 1,
+  },
+  timelineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  timelineDescription: {
+    flex: 1,
+    fontSize: 15,
+    color: '#111827',
+    fontWeight: '500' as const,
+    marginRight: 8,
+  },
+  timelineDate: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  timelineMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  roleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  roleBadgeText: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+  },
+  timelineTime: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  changesContainer: {
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+  },
+  changeItem: {
+    marginBottom: 4,
+  },
+  changeField: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600' as const,
+  },
+  changeValue: {
+    fontSize: 12,
+    color: '#374151',
+    marginTop: 2,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '700' as const,
+  },
+  emptyNotifications: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyNotificationsText: {
+    fontSize: 16,
+    color: '#9CA3AF',
+    marginTop: 12,
+  },
+  notificationItem: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  notificationIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationContent: {
+    flex: 1,
+  },
+  notificationMessage: {
+    fontSize: 14,
+    color: '#111827',
+    marginBottom: 4,
+  },
+  notificationTime: {
+    fontSize: 12,
+    color: '#6B7280',
   },
 });

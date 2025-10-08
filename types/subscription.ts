@@ -7,6 +7,12 @@ export interface CustomProject {
   targetDate?: string;
   status: 'planned' | 'in-progress' | 'completed';
   createdAt: string;
+  updatedAt?: string;
+  createdBy?: string;
+  createdByRole?: 'tech' | 'homeowner' | 'admin';
+  completedDate?: string;
+  actualCost?: string;
+  notes?: string;
 }
 
 export interface MonthlyVisitRequest {
@@ -29,6 +35,12 @@ export interface YearlyPlanItem {
   priority: 'low' | 'medium' | 'high';
   dependencies?: string[];
   notes?: string;
+  status?: 'planned' | 'in-progress' | 'completed' | 'skipped';
+  completedDate?: string;
+  actualCost?: string;
+  createdBy?: string;
+  createdByRole?: 'tech' | 'homeowner' | 'admin';
+  updatedAt?: string;
 }
 
 export interface FiveYearPlan {
@@ -44,6 +56,37 @@ export interface FiveYearPlan {
   keyMilestones: string[];
 }
 
+export interface BlueprintHistoryEntry {
+  id: string;
+  timestamp: string;
+  action: 'created' | 'updated' | 'project_added' | 'project_updated' | 'project_completed' | 'plan_item_added' | 'plan_item_updated' | 'plan_item_completed';
+  description: string;
+  userId: string;
+  userName: string;
+  userRole: 'tech' | 'homeowner' | 'admin';
+  changes?: {
+    field: string;
+    oldValue?: any;
+    newValue?: any;
+  }[];
+  relatedItemId?: string;
+  relatedItemType?: 'project' | 'plan_item' | 'goal' | 'priority';
+}
+
+export interface BlueprintNotification {
+  id: string;
+  blueprintId: string;
+  propertyId: string;
+  timestamp: string;
+  type: 'user_update' | 'tech_update' | 'project_added' | 'project_completed' | 'plan_modified';
+  message: string;
+  userId: string;
+  userName: string;
+  userRole: 'tech' | 'homeowner' | 'admin';
+  read: boolean;
+  recipientRole: 'tech' | 'homeowner' | 'admin';
+}
+
 export interface MyHomeBlueprint {
   id: string;
   propertyId: string;
@@ -56,6 +99,8 @@ export interface MyHomeBlueprint {
   budgetRange?: string;
   timeline?: string;
   fiveYearPlan?: FiveYearPlan;
+  history: BlueprintHistoryEntry[];
+  notifications: BlueprintNotification[];
 }
 
 export interface MyHomeScore {
