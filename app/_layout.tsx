@@ -28,11 +28,14 @@ function RootLayoutNav() {
     if (isLoading) return;
 
     const inPublicRoute = segments[0] === 'login' || segments[0] === 'signup' || segments[0] === 'forgot-password';
-    const inTechPortal = segments[0] === 'tech-portal';
+
+    console.log('[RootLayoutNav] Auth state:', { isAuthenticated, isLoading, segments: segments.join('/') });
 
     if (!isAuthenticated && !inPublicRoute) {
+      console.log('[RootLayoutNav] Not authenticated, redirecting to login');
       router.replace('/login');
-    } else if (isAuthenticated && inPublicRoute && !inTechPortal) {
+    } else if (isAuthenticated && inPublicRoute) {
+      console.log('[RootLayoutNav] Authenticated in public route, redirecting to home');
       router.replace('/(tabs)/(home)');
     }
   }, [isAuthenticated, segments, isLoading, router]);
@@ -109,6 +112,18 @@ function RootLayoutNav() {
         name="tech-portal" 
         options={{ 
           title: "Tech Portal",
+        }} 
+      />
+      <Stack.Screen 
+        name="tech-properties-view" 
+        options={{ 
+          title: "Properties",
+        }} 
+      />
+      <Stack.Screen 
+        name="quickstart-snapshot" 
+        options={{ 
+          title: "QuickStart Snapshot",
         }} 
       />
       <Stack.Screen 
