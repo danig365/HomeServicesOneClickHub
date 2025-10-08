@@ -252,13 +252,16 @@ export default function QuickStartSnapshotScreen() {
     console.log('[QuickStart] Taking photo');
 
     if (!cameraRef.current) {
+      console.error('[QuickStart] Camera ref not available');
       Alert.alert('Error', 'Camera not ready');
       return;
     }
 
     try {
+      console.log('[QuickStart] Calling takePictureAsync...');
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
+        skipProcessing: true,
       });
 
       console.log('[QuickStart] Photo captured:', photo);
@@ -269,10 +272,13 @@ export default function QuickStartSnapshotScreen() {
         setTimeout(() => {
           handleSavePhoto(photo.uri);
         }, 800);
+      } else {
+        console.error('[QuickStart] No URI in photo result');
+        Alert.alert('Error', 'Failed to capture photo - no URI returned');
       }
     } catch (error) {
-      console.error('Failed to take photo:', error);
-      Alert.alert('Error', 'Failed to capture photo');
+      console.error('[QuickStart] Failed to take photo:', error);
+      Alert.alert('Error', `Failed to take photo: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
