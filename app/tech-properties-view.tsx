@@ -43,9 +43,9 @@ export default function TechPropertiesViewScreen() {
   const techId = isTech ? currentUser?.id : undefined;
 
   const propertiesWithData = useMemo<PropertyWithData[]>(() => {
-    return properties.map(property => {
-      let propertyAppointments = getAppointmentsByProperty(property.id);
-      let propertySnapshots = getSnapshotsByProperty(property.id);
+    return (properties || []).map(property => {
+      let propertyAppointments = getAppointmentsByProperty(property.id) || [];
+      let propertySnapshots = getSnapshotsByProperty(property.id) || [];
 
       if (techId) {
         propertyAppointments = propertyAppointments.filter(apt => apt.techId === techId);
@@ -246,34 +246,38 @@ export default function TechPropertiesViewScreen() {
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
         <TouchableOpacity
-          style={[styles.filterButton, filterType === 'all' && styles.filterButtonActive]}
+          style={[styles.filterChip, filterType === 'all' && styles.filterChipActive]}
           onPress={() => setFilterType('all')}
         >
-          <Text style={[styles.filterText, filterType === 'all' && styles.filterTextActive]}>
+          <Icons.List size={16} color={filterType === 'all' ? 'white' : COLORS.teal} />
+          <Text style={[styles.filterChipText, filterType === 'all' && styles.filterChipTextActive]}>
             All
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.filterButton, filterType === 'appointments' && styles.filterButtonActive]}
+          style={[styles.filterChip, filterType === 'appointments' && styles.filterChipActive]}
           onPress={() => setFilterType('appointments')}
         >
-          <Text style={[styles.filterText, filterType === 'appointments' && styles.filterTextActive]}>
+          <Icons.Calendar size={16} color={filterType === 'appointments' ? 'white' : COLORS.teal} />
+          <Text style={[styles.filterChipText, filterType === 'appointments' && styles.filterChipTextActive]}>
             Appointments
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.filterButton, filterType === 'snapshots' && styles.filterButtonActive]}
+          style={[styles.filterChip, filterType === 'snapshots' && styles.filterChipActive]}
           onPress={() => setFilterType('snapshots')}
         >
-          <Text style={[styles.filterText, filterType === 'snapshots' && styles.filterTextActive]}>
+          <Icons.Camera size={16} color={filterType === 'snapshots' ? 'white' : COLORS.teal} />
+          <Text style={[styles.filterChipText, filterType === 'snapshots' && styles.filterChipTextActive]}>
             Snapshots
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.filterButton, filterType === 'blueprints' && styles.filterButtonActive]}
+          style={[styles.filterChip, filterType === 'blueprints' && styles.filterChipActive]}
           onPress={() => setFilterType('blueprints')}
         >
-          <Text style={[styles.filterText, filterType === 'blueprints' && styles.filterTextActive]}>
+          <Icons.FileText size={16} color={filterType === 'blueprints' ? 'white' : COLORS.teal} />
+          <Text style={[styles.filterChipText, filterType === 'blueprints' && styles.filterChipTextActive]}>
             Blueprints
           </Text>
         </TouchableOpacity>
@@ -662,29 +666,31 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   filterContainer: {
-    flexDirection: 'row',
     paddingHorizontal: 16,
     marginBottom: 12,
-    gap: 8,
   },
-  filterButton: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.teal,
+  filterChip: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: COLORS.teal,
+    backgroundColor: 'white',
+    marginRight: 8,
   },
-  filterButtonActive: {
+  filterChipActive: {
     backgroundColor: COLORS.teal,
+    borderColor: COLORS.teal,
   },
-  filterText: {
-    fontSize: 14,
+  filterChipText: {
+    fontSize: 13,
     fontWeight: '600' as const,
     color: COLORS.teal,
   },
-  filterTextActive: {
+  filterChipTextActive: {
     color: 'white',
   },
   section: {

@@ -131,7 +131,13 @@ export default function SnapshotInspectionScreen() {
   };
 
   const handleOpenCamera = async (roomId?: string, mode: 'photo' | 'video' = 'photo') => {
-    console.log('[Camera] Opening camera, current permission:', cameraPermission);
+    console.log('[Camera] Opening camera for room:', roomId, 'mode:', mode);
+    console.log('[Camera] Current permission:', cameraPermission);
+    
+    if (!roomId) {
+      Alert.alert('Error', 'Please select a room first');
+      return;
+    }
     
     if (!cameraPermission) {
       console.log('[Camera] Permission object is null, requesting...');
@@ -153,13 +159,31 @@ export default function SnapshotInspectionScreen() {
       }
     }
 
-    console.log('[Camera] Permission granted, opening camera modal');
-    setCurrentRoomId(roomId || null);
+    console.log('[Camera] Permission granted, setting room and opening camera modal');
+    setCurrentRoomId(roomId);
     setShowCameraModal(true);
   };
 
   const handleTakePhoto = async () => {
-    if (!cameraRef.current) return;
+    console.log('[Camera] Taking photo, currentRoomId:', currentRoomId);
+    
+    if (!cameraRef.current) {
+      console.log('[Camera] Camera ref not available');
+      Alert.alert('Error', 'Camera not ready');
+      return;
+    }
+
+    if (!currentRoomId) {
+      console.log('[Camera] No room selected');
+      Alert.alert('Error', 'No room selected');
+      return;
+    }
+
+    if (!snapshot) {
+      console.log('[Camera] No snapshot available');
+      Alert.alert('Error', 'Snapshot not found');
+      return;
+    }
 
     try {
       const photo = await cameraRef.current.takePictureAsync({
@@ -168,7 +192,7 @@ export default function SnapshotInspectionScreen() {
 
       console.log('[Snapshot] Photo captured:', photo);
 
-      if (photo && photo.uri && currentRoomId && snapshot) {
+      if (photo && photo.uri) {
         const room = snapshot.rooms.find(r => r.id === currentRoomId);
         if (room) {
           const photoUri = String(photo.uri);
@@ -189,8 +213,12 @@ export default function SnapshotInspectionScreen() {
           setTimeout(() => {
             setCapturedMedia(null);
             setShowCameraModal(false);
+            setCurrentRoomId(null);
           }, 1500);
-          Alert.alert('Success', 'Photo captured');
+          Alert.alert('Success', 'Photo captured and saved');
+        } else {
+          console.log('[Camera] Room not found:', currentRoomId);
+          Alert.alert('Error', 'Room not found');
         }
       }
     } catch (error) {
@@ -200,7 +228,30 @@ export default function SnapshotInspectionScreen() {
   };
 
   const handleStartVideoRecording = async () => {
-    if (!cameraRef.current || isRecordingVideo) return;
+    console.log('[Camera] Starting video recording, currentRoomId:', currentRoomId);
+    
+    if (!cameraRef.current) {
+      console.log('[Camera] Camera ref not available');
+      Alert.alert('Error', 'Camera not ready');
+      return;
+    }
+
+    if (isRecordingVideo) {
+      console.log('[Camera] Already recording');
+      return;
+    }
+
+    if (!currentRoomId) {
+      console.log('[Camera] No room selected');
+      Alert.alert('Error', 'No room selected');
+      return;
+    }
+
+    if (!snapshot) {
+      console.log('[Camera] No snapshot available');
+      Alert.alert('Error', 'Snapshot not found');
+      return;
+    }
 
     try {
       setIsRecordingVideo(true);
@@ -210,7 +261,7 @@ export default function SnapshotInspectionScreen() {
 
       console.log('[Snapshot] Video recorded:', video);
 
-      if (video && video.uri && currentRoomId && snapshot) {
+      if (video && video.uri) {
         const room = snapshot.rooms.find(r => r.id === currentRoomId);
         if (room) {
           const videoUri = String(video.uri);
@@ -227,7 +278,13 @@ export default function SnapshotInspectionScreen() {
           await updateRoomInspection(snapshot.id, currentRoomId, {
             images: [...room.images, newVideo],
           });
-          Alert.alert('Success', 'Video recorded');
+          
+          setShowCameraModal(false);
+          setCurrentRoomId(null);
+          Alert.alert('Success', 'Video recorded and saved');
+        } else {
+          console.log('[Camera] Room not found:', currentRoomId);
+          Alert.alert('Error', 'Room not found');
         }
       }
     } catch (error) {
