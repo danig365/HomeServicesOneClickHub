@@ -431,11 +431,63 @@ export default function QuickStartSnapshotScreen() {
       const { addPlanItem } = await import('@/hooks/subscription-store').then(m => m.useSubscription());
       
       if (currentUser) {
+        const avgScore = Math.round(rooms.reduce((sum, r) => sum + r.score, 0) / rooms.length);
+        const allPhotos = rooms.flatMap(r => r.photos.map(p => p.uri));
+        
+        const roomSummaries = rooms
+          .filter(r => r.completed)
+          .map(r => {
+            const details = [];
+            details.push(`${r.name}: Score ${r.score}/100`);
+            if (r.photos.length > 0) details.push(`${r.photos.length} photos`);
+            if (r.audioNotes.length > 0) details.push(`${r.audioNotes.length} audio notes`);
+            if (r.appliances.length > 0) details.push(`${r.appliances.length} appliances documented`);
+            if (r.notes) details.push(`Notes: ${r.notes}`);
+            return details.join(' • ');
+          })
+          .join('\n');
+        
+        const appliancesList = rooms
+          .flatMap(r => r.appliances.map(a => ({
+            room: r.name,
+            ...a
+          })))
+          .filter(a => a.name)
+          .map(a => {
+            const parts = [`${a.room}: ${a.name}`];
+            if (a.serialNumber) parts.push(`S/N: ${a.serialNumber}`);
+            if (a.modelNumber) parts.push(`Model: ${a.modelNumber}`);
+            if (a.filterType) parts.push(`Filter: ${a.filterType}`);
+            if (a.filterSize) parts.push(`Size: ${a.filterSize}`);
+            return parts.join(' | ');
+          })
+          .join('\n');
+        
+        const fullDescription = [
+          `Comprehensive QuickStart property inspection completed on ${new Date().toLocaleDateString()}.`,
+          `\n📊 Overall Score: ${avgScore}/100`,
+          `📸 Total Photos: ${totalPhotos}`,
+          `🏠 Rooms Inspected: ${completedRooms}`,
+          `\n🔍 ROOM DETAILS:\n${roomSummaries}`,
+        ];
+        
+        if (appliancesList) {
+          fullDescription.push(`\n🔧 APPLIANCES DOCUMENTED:\n${appliancesList}`);
+        }
+        
+        if (overallNotes) {
+          fullDescription.push(`\n📝 OVERALL NOTES:\n${overallNotes}`);
+        }
+        
+        fullDescription.push(
+          `\n✅ This comprehensive snapshot serves as a baseline for your property's condition and maintenance history.`
+        );
+        
         await addPlanItem(
           propertyId as string,
           {
-            title: 'QuickStart Snapshot Completed',
-            description: `Comprehensive property inspection with ${totalPhotos} photos across ${completedRooms} rooms. Overall score: ${Math.round(rooms.reduce((sum, r) => sum + r.score, 0) / rooms.length)}/100`,
+            title: `QuickStart Snapshot - Score: ${avgScore}/100`,
+            description: fullDescription.join('\n'),
             category: 'inspection',
             priority: 'medium',
             year: new Date().getFullYear(),
@@ -443,6 +495,8 @@ export default function QuickStartSnapshotScreen() {
             status: 'completed',
             completedDate: new Date().toISOString(),
             notes: overallNotes,
+            photos: allPhotos,
+            techNotes: `Completed by ${currentUser.name}. ${completedRooms} rooms inspected with ${totalPhotos} photos and detailed documentation.`,
             createdBy: currentUser.id,
             createdByRole: currentUser.role,
           },
@@ -456,7 +510,7 @@ export default function QuickStartSnapshotScreen() {
       
       Alert.alert(
         'QuickStart Complete!',
-        `Snapshot saved with ${totalPhotos} photos across ${completedRooms} rooms. The report has been added to the property blueprint timeline.`,
+        `Snapshot saved with ${totalPhotos} photos across ${completedRooms} rooms. The complete report with all photos, scores, and appliance details has been added to the property blueprint timeline.`,
         [
           { text: 'View Blueprint', onPress: () => {
             router.back();

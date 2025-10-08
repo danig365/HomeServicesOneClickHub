@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, SafeAreaView, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, SafeAreaView, Modal, Platform, Image } from 'react-native';
 import { Stack, router } from 'expo-router';
 import * as Icons from 'lucide-react-native';
 import { useProperties } from '@/hooks/properties-store';
@@ -418,7 +418,28 @@ export default function BlueprintScreen() {
                             </View>
 
                             {item.description && (
-                              <Text style={styles.itemDescription} numberOfLines={2}>{item.description}</Text>
+                              <Text style={styles.itemDescription} numberOfLines={item.category === 'inspection' ? 20 : 2}>{item.description}</Text>
+                            )}
+                            
+                            {item.photos && item.photos.length > 0 && (
+                              <View style={styles.itemPhotosSection}>
+                                <Text style={styles.itemPhotosLabel}>📸 {item.photos.length} Photos Attached</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.itemPhotosScroll}>
+                                  {item.photos.slice(0, 5).map((photoUri, idx) => (
+                                    <Image
+                                      key={idx}
+                                      source={{ uri: photoUri }}
+                                      style={styles.itemPhotoThumbnail}
+                                      resizeMode="cover"
+                                    />
+                                  ))}
+                                  {item.photos.length > 5 && (
+                                    <View style={styles.itemPhotoMore}>
+                                      <Text style={styles.itemPhotoMoreText}>+{item.photos.length - 5}</Text>
+                                    </View>
+                                  )}
+                                </ScrollView>
+                              </View>
                             )}
 
                             <View style={styles.itemMeta}>
@@ -929,6 +950,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     marginBottom: 8,
+  },
+  itemPhotosSection: {
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  itemPhotosLabel: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  itemPhotosScroll: {
+    flexDirection: 'row',
+  },
+  itemPhotoThumbnail: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 8,
+    backgroundColor: '#F3F4F6',
+  },
+  itemPhotoMore: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemPhotoMoreText: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: '#6B7280',
   },
   metaItem: {
     flexDirection: 'row',
