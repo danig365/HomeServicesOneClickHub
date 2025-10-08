@@ -63,6 +63,11 @@ export default function SnapshotInspectionScreen() {
 
   const snapshot = snapshots.find(s => s.id === id);
   const property = snapshot?.propertyId ? properties.find(p => p.id === snapshot.propertyId) : null;
+  
+  console.log('[SnapshotInspection] Snapshot ID:', id);
+  console.log('[SnapshotInspection] Found snapshot:', snapshot ? 'Yes' : 'No');
+  console.log('[SnapshotInspection] Property ID:', snapshot?.propertyId);
+  console.log('[SnapshotInspection] Found property:', property ? property.name : 'No');
 
   const [structuralScore, setStructuralScore] = useState(snapshot?.structuralScore?.toString() || '85');
   const [mechanicalScore, setMechanicalScore] = useState(snapshot?.mechanicalScore?.toString() || '85');
@@ -405,12 +410,15 @@ export default function SnapshotInspectionScreen() {
 
     Alert.alert(
       'Complete Inspection',
-      'This will finalize the snapshot and create the home score. Continue?',
+      `This will finalize the snapshot for ${property?.name || 'this property'} and add it to the blueprint timeline. Continue?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Complete',
           onPress: async () => {
+            console.log('[SnapshotInspection] Completing snapshot:', snapshot.id);
+            console.log('[SnapshotInspection] Property ID:', snapshot.propertyId);
+            
             await completeSnapshot(snapshot.id);
             
             const overallScore = Math.round(
@@ -419,6 +427,8 @@ export default function SnapshotInspectionScreen() {
             );
 
             if (snapshot.propertyId) {
+              console.log('[SnapshotInspection] Updating score for property:', snapshot.propertyId);
+              
               await updateScore(snapshot.propertyId, {
                 id: `score-${Date.now()}`,
                 propertyId: snapshot.propertyId,
@@ -436,9 +446,11 @@ export default function SnapshotInspectionScreen() {
                 recommendations: [],
                 createdAt: new Date().toISOString(),
               });
+              
+              console.log('[SnapshotInspection] Score updated successfully');
             }
 
-            Alert.alert('Success', 'Snapshot inspection completed and home score created');
+            Alert.alert('Success', `Snapshot inspection completed for ${property?.name || 'property'}. Check the blueprint timeline to see the results.`);
             router.back();
           },
         },

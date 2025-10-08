@@ -29,10 +29,32 @@ export default function AppointmentDetailScreen() {
   const appointment = appointments.find(a => a.id === id);
   const property = appointment ? properties.find(p => p.id === appointment.propertyId) : null;
 
-  if (!appointment || !property) {
+  if (!appointment) {
     return (
       <View style={styles.container}>
+        <Stack.Screen 
+          options={{ 
+            title: 'Appointment',
+            headerStyle: { backgroundColor: COLORS.teal },
+            headerTintColor: COLORS.gold,
+          }} 
+        />
         <Text style={styles.errorText}>Appointment not found</Text>
+      </View>
+    );
+  }
+  
+  if (!property) {
+    return (
+      <View style={styles.container}>
+        <Stack.Screen 
+          options={{ 
+            title: 'Appointment',
+            headerStyle: { backgroundColor: COLORS.teal },
+            headerTintColor: COLORS.gold,
+          }} 
+        />
+        <Text style={styles.errorText}>Property not found for this appointment</Text>
       </View>
     );
   }

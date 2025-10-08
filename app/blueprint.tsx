@@ -24,7 +24,30 @@ export default function BlueprintScreen() {
   const { getSubscription, addPlanItem, updatePlanItem, removePlanItem } = useSubscription();
   const { currentUser } = useUser();
   const property = getSelectedProperty();
-  const subscription = property ? getSubscription(property.id) : null;
+  
+  if (!property) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Stack.Screen
+          options={{
+            title: 'Property Timeline',
+            headerStyle: { backgroundColor: COLORS.teal },
+            headerTintColor: COLORS.cream,
+          }}
+        />
+        <View style={styles.emptyContainer}>
+          <Icons.Home size={64} color="#D1D5DB" />
+          <Text style={styles.emptyTitle}>No Property Selected</Text>
+          <Text style={styles.emptyText}>Please select a property first to view its timeline</Text>
+          <TouchableOpacity style={styles.createButton} onPress={() => router.back()}>
+            <Text style={styles.createButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+  
+  const subscription = getSubscription(property.id);
   const blueprint = subscription?.blueprint;
   const fiveYearPlan = blueprint?.fiveYearPlan;
 
