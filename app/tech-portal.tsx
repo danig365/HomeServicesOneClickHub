@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Icons from 'lucide-react-native';
@@ -10,26 +10,13 @@ import { useUser } from '@/hooks/user-store';
 import { COLORS } from '@/constants/colors';
 import { Property } from '@/types/property';
 
-type ViewMode = 'appointments' | 'properties';
-type PropertyFilterType = 'all' | 'assigned' | 'unassigned';
-
 export default function TechPortalScreen() {
   const insets = useSafeAreaInsets();
   const { properties } = useProperties();
-  const { appointments, getUpcomingAppointments, getInProgressAppointments, createAppointment } = useTechAppointments();
-  const { createSnapshot } = useSnapshots();
-  const { currentUser, techs, assignTechToProperty, unassignTechFromProperty, getTechsForProperty } = useUser();
+  const { appointments, getUpcomingAppointments, getInProgressAppointments } = useTechAppointments();
+  const { } = useSnapshots();
+  const { currentUser } = useUser();
   
-  const [viewMode, setViewMode] = useState<ViewMode>('appointments');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [propertyFilter, setPropertyFilter] = useState<PropertyFilterType>('all');
-  const [showAssignModal, setShowAssignModal] = useState(false);
-  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
-  const [showCreateAppointmentModal, setShowCreateAppointmentModal] = useState(false);
-  const [selectedPropertyForAppointment, setSelectedPropertyForAppointment] = useState<Property | null>(null);
-  const [appointmentType, setAppointmentType] = useState<'standard' | 'snapshot'>('standard');
-  const [appointmentDate, setAppointmentDate] = useState('');
-  const [showQuickStartModal, setShowQuickStartModal] = useState(false);
   const [dashboardStats, setDashboardStats] = useState({
     totalAppointments: 0,
     completedToday: 0,
@@ -61,99 +48,20 @@ export default function TechPortalScreen() {
       inProgress: inProgressAppointments.length,
       upcoming: upcomingAppointments.length,
     });
-  }, [inProgressAppointments.length, upcomingAppointments.length]);
-
-  const filteredProperties = useMemo(() => {
-    return properties.filter(p => {
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        if (!p.name.toLowerCase().includes(query) && !p.address.toLowerCase().includes(query)) {
-          return false;
-        }
-      }
-
-      if (propertyFilter === 'assigned') {
-        const assignedTechs = getTechsForProperty(p.id);
-        return assignedTechs.length > 0;
-      } else if (propertyFilter === 'unassigned') {
-        const assignedTechs = getTechsForProperty(p.id);
-        return assignedTechs.length === 0;
-      }
-
-      return true;
-    });
-  }, [properties, searchQuery, propertyFilter, getTechsForProperty]);
-
-  const handleAssignTech = (property: Property) => {
-    setSelectedProperty(property);
-    setShowAssignModal(true);
-  };
-
-  const handleTechAssignment = async (techId: string) => {
-    if (!selectedProperty) return;
-
-    const assignedTechs = getTechsForProperty(selectedProperty.id);
-    const isAssigned = assignedTechs.some(t => t.id === techId);
-
-    if (isAssigned) {
-      await unassignTechFromProperty(techId, selectedProperty.id);
-      Alert.alert('Success', 'Tech unassigned from property');
-    } else {
-      await assignTechToProperty(techId, selectedProperty.id);
-      Alert.alert('Success', 'Tech assigned to property');
-    }
-  };
-
-  const handleCreateAppointment = (property: Property) => {
-    setSelectedPropertyForAppointment(property);
-    setAppointmentType('standard');
-    setAppointmentDate('');
-    setShowCreateAppointmentModal(true);
-  };
-
-  const handleConfirmCreateAppointment = async () => {
-    if (!selectedPropertyForAppointment || !appointmentDate) {
-      Alert.alert('Error', 'Please select a date for the appointment');
-      return;
-    }
-
-    const techId = isTech ? currentUser?.id : techs[0]?.id;
-    if (!techId) {
-      Alert.alert('Error', 'No tech available');
-      return;
-    }
-
-    await createAppointment(
-      selectedPropertyForAppointment.id,
-      techId,
-      appointmentType,
-      appointmentDate
-    );
-
-    setShowCreateAppointmentModal(false);
-    Alert.alert('Success', 'Appointment created successfully');
-  };
+  }, [appointments, inProgressAppointments.length, upcomingAppointments.length]);
 
   const handleQuickStartSnapshot = async (property: Property) => {
-    const techId = isTech ? currentUser?.id : techs[0]?.id;
+    const techId = isTech ? currentUser?.id : undefined;
     if (!techId) {
       Alert.alert('Error', 'No tech available');
       return;
     }
 
     try {
-      const snapshot = await createSnapshot(techId, property.id);
-      
-      console.log('Created standalone snapshot:', snapshot);
-      
-      setShowQuickStartModal(false);
-      
-      setTimeout(() => {
-        router.push(`/snapshot-inspection/${snapshot.id}` as any);
-      }, 100);
+      router.push(`/quickstart-snapshot?propertyId=${property.id}` as any);
     } catch (error) {
-      console.error('Failed to create snapshot:', error);
-      Alert.alert('Error', 'Failed to start snapshot inspection');
+      console.error('Failed to start QuickStart:', error);
+      Alert.alert('Error', 'Failed to start QuickStart snapshot');
     }
   };
 
@@ -187,444 +95,160 @@ export default function TechPortalScreen() {
 
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
-            <Icons.Calendar size={20} color={COLORS.gold} />
+            <Icons.Calendar size={18} color={COLORS.gold} />
             <Text style={styles.statNumber}>{dashboardStats.upcoming}</Text>
             <Text style={styles.statLabel}>Upcoming</Text>
           </View>
           <View style={styles.statCard}>
-            <Icons.Clock size={20} color="#F59E0B" />
+            <Icons.Clock size={18} color="#F59E0B" />
             <Text style={styles.statNumber}>{dashboardStats.inProgress}</Text>
             <Text style={styles.statLabel}>In Progress</Text>
           </View>
           <View style={styles.statCard}>
-            <Icons.CheckCircle size={20} color="#10B981" />
+            <Icons.CheckCircle size={18} color="#10B981" />
             <Text style={styles.statNumber}>{dashboardStats.completedToday}</Text>
             <Text style={styles.statLabel}>Today</Text>
           </View>
           <View style={styles.statCard}>
-            <Icons.Briefcase size={20} color="white" />
-            <Text style={styles.statNumber}>{dashboardStats.totalAppointments}</Text>
-            <Text style={styles.statLabel}>Total</Text>
+            <Icons.Home size={18} color="white" />
+            <Text style={styles.statNumber}>{properties.length}</Text>
+            <Text style={styles.statLabel}>Properties</Text>
           </View>
         </View>
-      </View>
-
-      <View style={styles.viewToggle}>
-        <TouchableOpacity
-          style={[styles.toggleButton, viewMode === 'appointments' && styles.toggleButtonActive]}
-          onPress={() => setViewMode('appointments')}
-        >
-          <Icons.Calendar size={20} color={viewMode === 'appointments' ? 'white' : COLORS.teal} />
-          <Text style={[styles.toggleText, viewMode === 'appointments' && styles.toggleTextActive]}>
-            Appointments
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toggleButton, viewMode === 'properties' && styles.toggleButtonActive]}
-          onPress={() => setViewMode('properties')}
-        >
-          <Icons.Home size={20} color={viewMode === 'properties' ? 'white' : COLORS.teal} />
-          <Text style={[styles.toggleText, viewMode === 'properties' && styles.toggleTextActive]}>
-            Properties
-          </Text>
-        </TouchableOpacity>
       </View>
 
       {(isTech || isAdmin) && (
         <View style={styles.quickActionsContainer}>
-          <TouchableOpacity
-            style={styles.quickStartButton}
-            onPress={() => setShowQuickStartModal(true)}
-          >
-            <Icons.Zap size={24} color="white" />
-            <Text style={styles.quickStartText}>QuickStart Snapshot</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.propertiesViewButton}
-            onPress={() => router.push('/tech-properties-view' as any)}
-          >
-            <Icons.Building2 size={24} color={COLORS.teal} />
-            <Text style={styles.propertiesViewText}>Properties View</Text>
-          </TouchableOpacity>
+          <Text style={styles.quickActionsTitle}>Quick Actions</Text>
+          <View style={styles.quickActionsRow}>
+            <TouchableOpacity
+              style={styles.quickActionCard}
+              onPress={() => router.push('/tech-properties-view' as any)}
+            >
+              <View style={styles.quickActionIconContainer}>
+                <Icons.Building2 size={28} color={COLORS.teal} />
+              </View>
+              <Text style={styles.quickActionTitle}>Properties</Text>
+              <Text style={styles.quickActionSubtitle}>View all properties</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickActionCard, styles.quickActionCardHighlight]}
+              onPress={() => {
+                if (properties.length === 1) {
+                  handleQuickStartSnapshot(properties[0]);
+                } else {
+                  router.push('/tech-properties-view' as any);
+                }
+              }}
+            >
+              <View style={[styles.quickActionIconContainer, styles.quickActionIconHighlight]}>
+                <Icons.Zap size={28} color="white" />
+              </View>
+              <Text style={[styles.quickActionTitle, styles.quickActionTitleHighlight]}>QuickStart</Text>
+              <Text style={[styles.quickActionSubtitle, styles.quickActionSubtitleHighlight]}>Room-by-room photos</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
-      {viewMode === 'appointments' ? (
-        <ScrollView style={styles.scrollView}>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>In Progress</Text>
-            {inProgressAppointments.length === 0 ? (
-              <View style={styles.emptyState}>
-                <View style={styles.emptyIconContainer}>
-                  <Icons.Clock size={40} color="#9CA3AF" />
-                </View>
-                <Text style={styles.emptyText}>No appointments in progress</Text>
-                <Text style={styles.emptySubtext}>Start working on scheduled appointments</Text>
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>In Progress</Text>
+          {inProgressAppointments.length === 0 ? (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconContainer}>
+                <Icons.Clock size={40} color="#9CA3AF" />
               </View>
-            ) : (
-              inProgressAppointments.map((apt) => {
-                const property = properties.find(p => p.id === apt.propertyId);
-                if (!property) return null;
-
-                return (
-                  <TouchableOpacity
-                    key={apt.id}
-                    style={styles.appointmentCard}
-                    onPress={() => router.push(`/appointment/${apt.id}` as any)}
-                  >
-                    <View style={styles.appointmentHeader}>
-                      <View style={styles.appointmentIconBadge}>
-                        {apt.type === 'snapshot' ? (
-                          <Icons.Camera size={20} color="#F59E0B" />
-                        ) : (
-                          <Icons.Wrench size={20} color={COLORS.teal} />
-                        )}
-                      </View>
-                      <View style={styles.appointmentInfo}>
-                        <Text style={styles.appointmentProperty}>{property.name}</Text>
-                        <Text style={styles.appointmentAddress}>{property.address}</Text>
-                        <View style={styles.appointmentMetaRow}>
-                          <Icons.Calendar size={14} color="#6B7280" />
-                          <Text style={styles.metaText}>{formatDate(apt.scheduledDate)}</Text>
-                          <View style={styles.statusBadge}>
-                            <View style={styles.statusDot} />
-                            <Text style={styles.statusText}>In Progress</Text>
-                          </View>
-                        </View>
-                      </View>
-                      <Icons.ChevronRight size={20} color="#9CA3AF" />
-                    </View>
-                  </TouchableOpacity>
-                );
-              })
-            )}
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Upcoming Appointments</Text>
-            {upcomingAppointments.length === 0 ? (
-              <View style={styles.emptyState}>
-                <View style={styles.emptyIconContainer}>
-                  <Icons.Calendar size={40} color="#9CA3AF" />
-                </View>
-                <Text style={styles.emptyText}>No upcoming appointments</Text>
-                <Text style={styles.emptySubtext}>Schedule new appointments from properties</Text>
-              </View>
-            ) : (
-              upcomingAppointments.map((apt) => {
-                const property = properties.find(p => p.id === apt.propertyId);
-                if (!property) return null;
-
-                return (
-                  <TouchableOpacity
-                    key={apt.id}
-                    style={styles.appointmentCard}
-                    onPress={() => router.push(`/appointment/${apt.id}` as any)}
-                  >
-                    <View style={styles.appointmentHeader}>
-                      <View style={styles.appointmentIconBadge}>
-                        {apt.type === 'snapshot' ? (
-                          <Icons.Camera size={20} color="#F59E0B" />
-                        ) : (
-                          <Icons.Wrench size={20} color={COLORS.teal} />
-                        )}
-                      </View>
-                      <View style={styles.appointmentInfo}>
-                        <Text style={styles.appointmentProperty}>{property.name}</Text>
-                        <Text style={styles.appointmentAddress}>{property.address}</Text>
-                        <View style={styles.appointmentMetaRow}>
-                          <Icons.Calendar size={14} color="#6B7280" />
-                          <Text style={styles.metaText}>{formatDate(apt.scheduledDate)}</Text>
-                        </View>
-                      </View>
-                      <Icons.ChevronRight size={20} color="#9CA3AF" />
-                    </View>
-                  </TouchableOpacity>
-                );
-              })
-            )}
-          </View>
-        </ScrollView>
-      ) : (
-        <>
-          <View style={styles.searchContainer}>
-            <Icons.Search size={20} color="#9CA3AF" style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search properties..."
-              placeholderTextColor="#9CA3AF"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-                <Icons.X size={18} color="#6B7280" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {isAdmin && (
-            <View style={styles.filterContainer}>
-              <TouchableOpacity
-                style={[styles.filterButton, propertyFilter === 'all' && styles.filterButtonActive]}
-                onPress={() => setPropertyFilter('all')}
-              >
-                <Text style={[styles.filterText, propertyFilter === 'all' && styles.filterTextActive]}>
-                  All
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.filterButton, propertyFilter === 'assigned' && styles.filterButtonActive]}
-                onPress={() => setPropertyFilter('assigned')}
-              >
-                <Text style={[styles.filterText, propertyFilter === 'assigned' && styles.filterTextActive]}>
-                  Assigned
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.filterButton, propertyFilter === 'unassigned' && styles.filterButtonActive]}
-                onPress={() => setPropertyFilter('unassigned')}
-              >
-                <Text style={[styles.filterText, propertyFilter === 'unassigned' && styles.filterTextActive]}>
-                  Unassigned
-                </Text>
-              </TouchableOpacity>
+              <Text style={styles.emptyText}>No appointments in progress</Text>
+              <Text style={styles.emptySubtext}>Start working on scheduled appointments</Text>
             </View>
-          )}
+          ) : (
+            inProgressAppointments.map((apt) => {
+              const property = properties.find(p => p.id === apt.propertyId);
+              if (!property) return null;
 
-          <ScrollView style={styles.scrollView}>
-            <View style={styles.section}>
-              {filteredProperties.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Icons.Home size={48} color="#D1D5DB" />
-                  <Text style={styles.emptyText}>No properties found</Text>
-                </View>
-              ) : (
-                filteredProperties.map((property) => {
-                  const assignedTechs = getTechsForProperty(property.id);
-
-                  return (
-                    <View key={property.id} style={styles.propertyCard}>
-                      <View style={styles.propertyHeader}>
-                        <View style={styles.propertyInfo}>
-                          <Text style={styles.propertyName}>{property.name}</Text>
-                          <Text style={styles.propertyAddress}>{property.address}</Text>
-                        </View>
-                      </View>
-
-                      {assignedTechs.length > 0 && (
-                        <View style={styles.techsContainer}>
-                          <Text style={styles.techsLabel}>Assigned Techs:</Text>
-                          {assignedTechs.map(tech => (
-                            <View key={tech.id} style={styles.techBadge}>
-                              <Icons.User size={14} color={COLORS.teal} />
-                              <Text style={styles.techName}>{tech.name}</Text>
-                            </View>
-                          ))}
-                        </View>
+              return (
+                <TouchableOpacity
+                  key={apt.id}
+                  style={styles.appointmentCard}
+                  onPress={() => router.push(`/appointment/${apt.id}` as any)}
+                >
+                  <View style={styles.appointmentHeader}>
+                    <View style={styles.appointmentIconBadge}>
+                      {apt.type === 'snapshot' ? (
+                        <Icons.Camera size={20} color="#F59E0B" />
+                      ) : (
+                        <Icons.Wrench size={20} color={COLORS.teal} />
                       )}
-
-                      <View style={styles.propertyActions}>
-                        {isAdmin && (
-                          <TouchableOpacity
-                            style={styles.actionButton}
-                            onPress={() => handleAssignTech(property)}
-                          >
-                            <Icons.UserPlus size={18} color={COLORS.teal} />
-                            <Text style={styles.actionButtonText}>Assign Tech</Text>
-                          </TouchableOpacity>
-                        )}
-                        <TouchableOpacity
-                          style={[styles.actionButton, styles.actionButtonPrimary]}
-                          onPress={() => handleCreateAppointment(property)}
-                        >
-                          <Icons.Plus size={18} color="white" />
-                          <Text style={styles.actionButtonTextPrimary}>New Appointment</Text>
-                        </TouchableOpacity>
-                      </View>
                     </View>
-                  );
-                })
-              )}
-            </View>
-          </ScrollView>
-        </>
-      )}
-
-      <Modal
-        visible={showAssignModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAssignModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Assign Technicians</Text>
-              <TouchableOpacity onPress={() => setShowAssignModal(false)}>
-                <Icons.X size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalScroll}>
-              {selectedProperty && (
-                <>
-                  <Text style={styles.modalPropertyName}>{selectedProperty.name}</Text>
-                  <Text style={styles.modalPropertyAddress}>{selectedProperty.address}</Text>
-
-                  <View style={styles.techsList}>
-                    {techs.map(tech => {
-                      const isAssigned = getTechsForProperty(selectedProperty.id).some(t => t.id === tech.id);
-
-                      return (
-                        <TouchableOpacity
-                          key={tech.id}
-                          style={[styles.techItem, isAssigned && styles.techItemAssigned]}
-                          onPress={() => handleTechAssignment(tech.id)}
-                        >
-                          <View style={styles.techItemInfo}>
-                            <Icons.User size={20} color={isAssigned ? COLORS.teal : '#6B7280'} />
-                            <View style={styles.techItemDetails}>
-                              <Text style={[styles.techItemName, isAssigned && styles.techItemNameAssigned]}>
-                                {tech.name}
-                              </Text>
-                              <Text style={styles.techItemEmail}>{tech.email}</Text>
-                            </View>
-                          </View>
-                          {isAssigned && <Icons.Check size={20} color={COLORS.teal} />}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal
-        visible={showCreateAppointmentModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowCreateAppointmentModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create Appointment</Text>
-              <TouchableOpacity onPress={() => setShowCreateAppointmentModal(false)}>
-                <Icons.X size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalScroll}>
-              {selectedPropertyForAppointment && (
-                <>
-                  <Text style={styles.modalPropertyName}>{selectedPropertyForAppointment.name}</Text>
-                  <Text style={styles.modalPropertyAddress}>{selectedPropertyForAppointment.address}</Text>
-
-                  <View style={styles.formSection}>
-                    <Text style={styles.formLabel}>Appointment Type</Text>
-                    <View style={styles.typeSelector}>
-                      <TouchableOpacity
-                        style={[styles.typeOption, appointmentType === 'standard' && styles.typeOptionActive]}
-                        onPress={() => setAppointmentType('standard')}
-                      >
-                        <Icons.CheckSquare size={20} color={appointmentType === 'standard' ? 'white' : COLORS.teal} />
-                        <Text style={[styles.typeOptionText, appointmentType === 'standard' && styles.typeOptionTextActive]}>
-                          Standard Home Care
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.typeOption, appointmentType === 'snapshot' && styles.typeOptionActive]}
-                        onPress={() => setAppointmentType('snapshot')}
-                      >
-                        <Icons.Camera size={20} color={appointmentType === 'snapshot' ? 'white' : COLORS.teal} />
-                        <Text style={[styles.typeOptionText, appointmentType === 'snapshot' && styles.typeOptionTextActive]}>
-                          MyHome Snapshot
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <View style={styles.formSection}>
-                    <Text style={styles.formLabel}>Scheduled Date</Text>
-                    <TextInput
-                      style={styles.dateInput}
-                      placeholder="YYYY-MM-DD"
-                      placeholderTextColor="#9CA3AF"
-                      value={appointmentDate}
-                      onChangeText={setAppointmentDate}
-                    />
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.createButton}
-                    onPress={handleConfirmCreateAppointment}
-                  >
-                    <Icons.Plus size={20} color="white" />
-                    <Text style={styles.createButtonText}>Create Appointment</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal
-        visible={showQuickStartModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowQuickStartModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View style={styles.quickStartModalHeader}>
-                <Icons.Zap size={24} color="#F59E0B" />
-                <Text style={styles.modalTitle}>QuickStart Snapshot</Text>
-              </View>
-              <TouchableOpacity onPress={() => setShowQuickStartModal(false)}>
-                <Icons.X size={24} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalScroll}>
-              <Text style={styles.quickStartDescription}>
-                Start a MyHome Snapshot inspection immediately. Select a property to begin the comprehensive home inspection.
-              </Text>
-
-              <View style={styles.propertiesList}>
-                {properties.length === 0 ? (
-                  <View style={styles.emptyState}>
-                    <Icons.Home size={48} color="#D1D5DB" />
-                    <Text style={styles.emptyText}>No properties available</Text>
-                  </View>
-                ) : (
-                  properties.map((property) => (
-                    <TouchableOpacity
-                      key={property.id}
-                      style={styles.quickStartPropertyCard}
-                      onPress={() => handleQuickStartSnapshot(property)}
-                    >
-                      <View style={styles.quickStartPropertyInfo}>
-                        <Icons.Home size={20} color={COLORS.teal} />
-                        <View style={styles.quickStartPropertyDetails}>
-                          <Text style={styles.quickStartPropertyName}>{property.name}</Text>
-                          <Text style={styles.quickStartPropertyAddress}>{property.address}</Text>
+                    <View style={styles.appointmentInfo}>
+                      <Text style={styles.appointmentProperty}>{property.name}</Text>
+                      <Text style={styles.appointmentAddress}>{property.address}</Text>
+                      <View style={styles.appointmentMetaRow}>
+                        <Icons.Calendar size={14} color="#6B7280" />
+                        <Text style={styles.metaText}>{formatDate(apt.scheduledDate)}</Text>
+                        <View style={styles.statusBadge}>
+                          <View style={styles.statusDot} />
+                          <Text style={styles.statusText}>In Progress</Text>
                         </View>
                       </View>
-                      <Icons.ChevronRight size={20} color="#9CA3AF" />
-                    </TouchableOpacity>
-                  ))
-                )}
-              </View>
-            </ScrollView>
-          </View>
+                    </View>
+                    <Icons.ChevronRight size={20} color="#9CA3AF" />
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
-      </Modal>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Upcoming Appointments</Text>
+          {upcomingAppointments.length === 0 ? (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconContainer}>
+                <Icons.Calendar size={40} color="#9CA3AF" />
+              </View>
+              <Text style={styles.emptyText}>No upcoming appointments</Text>
+              <Text style={styles.emptySubtext}>Schedule new appointments from properties</Text>
+            </View>
+          ) : (
+            upcomingAppointments.map((apt) => {
+              const property = properties.find(p => p.id === apt.propertyId);
+              if (!property) return null;
+
+              return (
+                <TouchableOpacity
+                  key={apt.id}
+                  style={styles.appointmentCard}
+                  onPress={() => router.push(`/appointment/${apt.id}` as any)}
+                >
+                  <View style={styles.appointmentHeader}>
+                    <View style={styles.appointmentIconBadge}>
+                      {apt.type === 'snapshot' ? (
+                        <Icons.Camera size={20} color="#F59E0B" />
+                      ) : (
+                        <Icons.Wrench size={20} color={COLORS.teal} />
+                      )}
+                    </View>
+                    <View style={styles.appointmentInfo}>
+                      <Text style={styles.appointmentProperty}>{property.name}</Text>
+                      <Text style={styles.appointmentAddress}>{property.address}</Text>
+                      <View style={styles.appointmentMetaRow}>
+                        <Icons.Calendar size={14} color="#6B7280" />
+                        <Text style={styles.metaText}>{formatDate(apt.scheduledDate)}</Text>
+                      </View>
+                    </View>
+                    <Icons.ChevronRight size={20} color="#9CA3AF" />
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </View>
+      </ScrollView>
+
+
     </View>
   );
 }
@@ -1100,51 +724,66 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   quickActionsContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    gap: 10,
+    padding: 16,
+    paddingBottom: 8,
   },
-  quickStartButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#F59E0B',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 16,
-    shadowColor: '#F59E0B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  quickStartText: {
-    fontSize: 18,
+  quickActionsTitle: {
+    fontSize: 14,
     fontWeight: '700' as const,
-    color: 'white',
+    color: '#6B7280',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  propertiesViewButton: {
+  quickActionsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
+    gap: 12,
+  },
+  quickActionCard: {
+    flex: 1,
     backgroundColor: 'white',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
     borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    gap: 8,
     borderWidth: 2,
-    borderColor: COLORS.teal,
+    borderColor: '#E5E7EB',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 3,
   },
-  propertiesViewText: {
-    fontSize: 18,
+  quickActionCardHighlight: {
+    borderColor: '#F59E0B',
+    backgroundColor: '#FFFBEB',
+  },
+  quickActionIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#F0FDFA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickActionIconHighlight: {
+    backgroundColor: '#F59E0B',
+  },
+  quickActionTitle: {
+    fontSize: 15,
     fontWeight: '700' as const,
-    color: COLORS.teal,
+    color: '#111827',
+  },
+  quickActionTitleHighlight: {
+    color: '#92400E',
+  },
+  quickActionSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  quickActionSubtitleHighlight: {
+    color: '#92400E',
   },
   quickStartModalHeader: {
     flexDirection: 'row',

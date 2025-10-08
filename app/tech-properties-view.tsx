@@ -44,7 +44,9 @@ export default function TechPropertiesViewScreen() {
   const techId = isTech ? currentUser?.id : undefined;
 
   const propertiesWithData = useMemo<PropertyWithData[]>(() => {
-    return (properties || []).map(property => {
+    if (!properties || properties.length === 0) return [];
+    
+    return properties.map(property => {
       let propertyAppointments = getAppointmentsByProperty(property.id) || [];
       let propertySnapshots = getSnapshotsByProperty(property.id) || [];
 
