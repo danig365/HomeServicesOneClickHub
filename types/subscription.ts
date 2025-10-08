@@ -27,20 +27,24 @@ export interface MonthlyVisitRequest {
 export interface YearlyPlanItem {
   id: string;
   year: number;
-  quarter: 1 | 2 | 3 | 4;
+  month: number;
   title: string;
   description: string;
-  category: 'maintenance' | 'upgrade' | 'repair' | 'inspection' | 'seasonal';
+  category: 'maintenance' | 'upgrade' | 'repair' | 'inspection' | 'seasonal' | 'project';
   estimatedCost?: string;
   priority: 'low' | 'medium' | 'high';
   dependencies?: string[];
   notes?: string;
-  status?: 'planned' | 'in-progress' | 'completed' | 'skipped';
+  status: 'planned' | 'in-progress' | 'completed' | 'skipped';
   completedDate?: string;
   actualCost?: string;
-  createdBy?: string;
-  createdByRole?: 'tech' | 'homeowner' | 'admin';
+  createdBy: string;
+  createdByRole: 'tech' | 'homeowner' | 'admin';
+  createdAt: string;
   updatedAt?: string;
+  photos?: string[];
+  techNotes?: string;
+  homeownerNotes?: string;
 }
 
 export interface FiveYearPlan {
@@ -59,7 +63,7 @@ export interface FiveYearPlan {
 export interface BlueprintHistoryEntry {
   id: string;
   timestamp: string;
-  action: 'created' | 'updated' | 'project_added' | 'project_updated' | 'project_completed' | 'plan_item_added' | 'plan_item_updated' | 'plan_item_completed';
+  action: 'created' | 'updated' | 'project_added' | 'project_updated' | 'project_completed' | 'plan_item_added' | 'plan_item_updated' | 'plan_item_completed' | 'plan_item_removed';
   description: string;
   userId: string;
   userName: string;

@@ -594,6 +594,70 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     console.log('[SubscriptionStore] Five-year plan saved successfully');
   }, [subscriptions, updateBlueprint]);
 
+  const addPlanItem = useCallback(async (propertyId: string, item: Omit<YearlyPlanItem, 'id' | 'createdAt'>, userId: string, userName: string, userRole: 'tech' | 'homeowner' | 'admin') => {
+    const subscription = subscriptions[propertyId];
+    if (!subscription?.blueprint) return;
+    
+    const newItem: YearlyPlanItem = {
+      ...item,
+      id: `plan-item-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      createdBy: userId,
+      createdByRole: userRole,
+    };
+    
+    let updatedPlan: FiveYearPlan;
+    
+    if (subscription.blueprint.fiveYearPlan) {
+      updatedPlan = {
+        ...subscription.blueprint.fiveYearPlan,
+        items: [...subscription.blueprint.fiveYearPlan.items, newItem],
+        updatedAt: new Date().toISOString(),
+      };
+    } else {
+      updatedPlan = {
+        id: `plan-${Date.now()}`,
+        propertyId,
+        blueprintId: subscription.blueprint.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        generatedByAI: false,
+        items: [newItem],
+        summary: '',
+        keyMilestones: [],
+      };
+    }
+    
+    const updatedBlueprint = {
+      ...subscription.blueprint,
+      fiveYearPlan: updatedPlan,
+      updatedAt: new Date().toISOString(),
+    };
+    
+    const historyEntry: Omit<BlueprintHistoryEntry, 'id' | 'timestamp'> = {
+      action: 'plan_item_added',
+      description: `${userName} added: ${item.title}`,
+      userId,
+      userName,
+      userRole,
+      relatedItemId: newItem.id,
+      relatedItemType: 'plan_item',
+    };
+    
+    const notification: Omit<BlueprintNotification, 'id' | 'timestamp' | 'read'> = {
+      blueprintId: subscription.blueprint.id,
+      propertyId,
+      type: 'plan_modified',
+      message: `${userName} added a new item to the 5-year plan: ${item.title}`,
+      userId,
+      userName,
+      userRole,
+      recipientRole: userRole === 'tech' ? 'homeowner' : 'tech',
+    };
+    
+    await updateBlueprint(propertyId, updatedBlueprint, historyEntry, notification);
+  }, [subscriptions, updateBlueprint]);
+
   const updatePlanItem = useCallback(async (propertyId: string, itemId: string, updates: Partial<YearlyPlanItem>, userId: string, userName: string, userRole: 'tech' | 'homeowner' | 'admin') => {
     const subscription = subscriptions[propertyId];
     if (!subscription?.blueprint?.fiveYearPlan) return;
@@ -609,8 +673,88 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       updatedAt: new Date().toISOString(),
     };
     
-    await updateFiveYearPlan(propertyId, updatedPlan, userId, userName, userRole);
-  }, [subscriptions, updateFiveYearPlan]);
+    const updatedBlueprint = {
+      ...subscription.blueprint,
+      fiveYearPlan: updatedPlan,
+      updatedAt: new Date().toISOString(),
+    };
+    
+    const action = updates.status === 'completed' ? 'plan_item_completed' : 'plan_item_updated';
+    const description = updates.status === 'completed'
+      ? `${userName} completed: ${oldItem.title}`
+      : `${userName} updated: ${oldItem.title}`;
+    
+    const historyEntry: Omit<BlueprintHistoryEntry, 'id' | 'timestamp'> = {
+      action,
+      description,
+      userId,
+      userName,
+      userRole,
+      relatedItemId: itemId,
+      relatedItemType: 'plan_item',
+      changes: Object.keys(updates).map(key => ({
+        field: key,
+        oldValue: (oldItem as any)[key],
+        newValue: (updates as any)[key],
+      })),
+    };
+    
+    const notification: Omit<BlueprintNotification, 'id' | 'timestamp' | 'read'> = {
+      blueprintId: subscription.blueprint.id,
+      propertyId,
+      type: 'plan_modified',
+      message: description,
+      userId,
+      userName,
+      userRole,
+      recipientRole: userRole === 'tech' ? 'homeowner' : 'tech',
+    };
+    
+    await updateBlueprint(propertyId, updatedBlueprint, historyEntry, notification);
+  }, [subscriptions, updateBlueprint]);
+
+  const removePlanItem = useCallback(async (propertyId: string, itemId: string, userId: string, userName: string, userRole: 'tech' | 'homeowner' | 'admin') => {
+    const subscription = subscriptions[propertyId];
+    if (!subscription?.blueprint?.fiveYearPlan) return;
+    
+    const item = subscription.blueprint.fiveYearPlan.items.find(i => i.id === itemId);
+    if (!item) return;
+    
+    const updatedPlan: FiveYearPlan = {
+      ...subscription.blueprint.fiveYearPlan,
+      items: subscription.blueprint.fiveYearPlan.items.filter(i => i.id !== itemId),
+      updatedAt: new Date().toISOString(),
+    };
+    
+    const updatedBlueprint = {
+      ...subscription.blueprint,
+      fiveYearPlan: updatedPlan,
+      updatedAt: new Date().toISOString(),
+    };
+    
+    const historyEntry: Omit<BlueprintHistoryEntry, 'id' | 'timestamp'> = {
+      action: 'plan_item_removed',
+      description: `${userName} removed: ${item.title}`,
+      userId,
+      userName,
+      userRole,
+      relatedItemId: itemId,
+      relatedItemType: 'plan_item',
+    };
+    
+    const notification: Omit<BlueprintNotification, 'id' | 'timestamp' | 'read'> = {
+      blueprintId: subscription.blueprint.id,
+      propertyId,
+      type: 'plan_modified',
+      message: `${userName} removed an item from the 5-year plan: ${item.title}`,
+      userId,
+      userName,
+      userRole,
+      recipientRole: userRole === 'tech' ? 'homeowner' : 'tech',
+    };
+    
+    await updateBlueprint(propertyId, updatedBlueprint, historyEntry, notification);
+  }, [subscriptions, updateBlueprint]);
 
   const markNotificationAsRead = useCallback(async (propertyId: string, notificationId: string) => {
     const subscription = subscriptions[propertyId];
@@ -659,7 +803,9 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     getSnapshotInspection,
     getActiveSnapshotInspection,
     updateFiveYearPlan,
+    addPlanItem,
     updatePlanItem,
+    removePlanItem,
     markNotificationAsRead,
     getUnreadNotifications,
   }), [
@@ -688,7 +834,9 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     getSnapshotInspection,
     getActiveSnapshotInspection,
     updateFiveYearPlan,
+    addPlanItem,
     updatePlanItem,
+    removePlanItem,
     markNotificationAsRead,
     getUnreadNotifications,
   ]);
