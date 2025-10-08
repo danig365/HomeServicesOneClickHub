@@ -31,8 +31,9 @@ const getBaseUrl = () => {
     const host = debuggerHost.split(':')[0];
     
     if (host.includes('.e2b.app')) {
-      const url = `https://8081-${host}`;
-      console.log('[tRPC] E2B environment detected, using URL:', url);
+      const baseHost = host.replace(/^\d+-/, '');
+      const url = `https://8081-${baseHost}`;
+      console.log('[tRPC] E2B environment detected, base host:', baseHost, 'final URL:', url);
       return url;
     }
     

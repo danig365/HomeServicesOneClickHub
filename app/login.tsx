@@ -52,7 +52,10 @@ export default function LoginScreen() {
       }
       
       if (host.includes('.e2b.app')) {
-        return `https://8081-${host}`;
+        const baseHost = host.replace(/^\d+-/, '');
+        const url = `https://8081-${baseHost}`;
+        console.log('[Login] E2B environment detected, base host:', baseHost, 'final URL:', url);
+        return url;
       }
       
       return `http://${host}:8081`;
