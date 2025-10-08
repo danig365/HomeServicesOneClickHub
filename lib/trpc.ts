@@ -28,26 +28,28 @@ const getBaseUrl = () => {
   if (debuggerHost) {
     console.log('[tRPC] Raw hostUri:', debuggerHost);
     
-    const host = debuggerHost.split(':')[0];
-    
-    if (debuggerHost.includes('.rork.live')) {
-      const url = `https://${host}`;
-      console.log('[tRPC] Rork.live tunnel detected, using URL:', url);
-      return url;
-    }
-    
     if (debuggerHost.includes('.e2b.app')) {
+      const host = debuggerHost.split(':')[0];
       const url = `https://${host}`;
       console.log('[tRPC] E2B environment detected, using URL:', url);
       return url;
     }
     
+    if (debuggerHost.includes('.rork.live')) {
+      const host = debuggerHost.split(':')[0];
+      const url = `https://${host}`;
+      console.log('[tRPC] Rork.live tunnel detected, using URL:', url);
+      return url;
+    }
+    
     if (debuggerHost.includes('tunnel.dev') || debuggerHost.includes('ngrok') || debuggerHost.includes('.trycloudflare.com')) {
+      const host = debuggerHost.split(':')[0];
       const url = `https://${host}`;
       console.log('[tRPC] Using tunnel URL:', url);
       return url;
     }
     
+    const host = debuggerHost.split(':')[0];
     const url = `http://${host}:8081`;
     console.log('[tRPC] Using debugger host:', url, 'from hostUri:', debuggerHost);
     return url;

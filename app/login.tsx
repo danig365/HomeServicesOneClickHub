@@ -45,24 +45,26 @@ export default function LoginScreen() {
     if (debuggerHost) {
       console.log('[Login] Raw hostUri:', debuggerHost);
       
-      const host = debuggerHost.split(':')[0];
-      
       if (debuggerHost.includes('.e2b.app')) {
+        const host = debuggerHost.split(':')[0];
         const url = `https://${host}`;
         console.log('[Login] E2B environment detected, using URL:', url);
         return url;
       }
       
       if (debuggerHost.includes('.rork.live')) {
+        const host = debuggerHost.split(':')[0];
         const url = `https://${host}`;
         console.log('[Login] Rork.live tunnel detected, using URL:', url);
         return url;
       }
       
       if (debuggerHost.includes('tunnel.dev') || debuggerHost.includes('ngrok') || debuggerHost.includes('.trycloudflare.com')) {
+        const host = debuggerHost.split(':')[0];
         return `https://${host}`;
       }
       
+      const host = debuggerHost.split(':')[0];
       return `http://${host}:8081`;
     }
 
