@@ -45,18 +45,20 @@ export default function LoginScreen() {
     if (debuggerHost) {
       console.log('[Login] Raw hostUri:', debuggerHost);
       
+      const host = debuggerHost.split(':')[0];
+      
       if (debuggerHost.includes('.e2b.app')) {
-        const parts = debuggerHost.split('-');
-        if (parts.length >= 2) {
-          const portPrefix = parts[0];
-          const restOfHost = parts.slice(1).join('-').split(':')[0];
-          const url = `https://${portPrefix}-${restOfHost}`;
-          console.log('[Login] E2B environment detected, constructed URL:', url);
-          return url;
-        }
+        const url = `https://${host}`;
+        console.log('[Login] E2B environment detected, using URL:', url);
+        return url;
       }
       
-      const host = debuggerHost.split(':')[0];
+      if (debuggerHost.includes('.rork.live')) {
+        const url = `https://${host}`;
+        console.log('[Login] Rork.live tunnel detected, using URL:', url);
+        return url;
+      }
+      
       if (debuggerHost.includes('tunnel.dev') || debuggerHost.includes('ngrok') || debuggerHost.includes('.trycloudflare.com')) {
         return `https://${host}`;
       }
