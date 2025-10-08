@@ -397,6 +397,7 @@ export default function TechPropertiesViewScreen() {
                           </View>
                           {item.appointments
                             .sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime())
+                            .slice(0, 5)
                             .map((apt) => (
                               <TouchableOpacity
                                 key={apt.id}
@@ -498,7 +499,7 @@ export default function TechPropertiesViewScreen() {
                         </View>
                       )}
 
-                      {item.appointments.length === 0 && item.snapshots.filter(s => !s.appointmentId).length === 0 && (
+                      {(item.appointments?.length || 0) === 0 && (item.snapshots?.filter(s => !s.appointmentId)?.length || 0) === 0 && (
                         <View style={styles.noDataState}>
                           <Icons.FileText size={32} color="#D1D5DB" />
                           <Text style={styles.noDataText}>No inspections or appointments yet</Text>

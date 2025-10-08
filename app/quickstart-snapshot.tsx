@@ -61,6 +61,10 @@ export default function QuickStartSnapshotScreen() {
   const [currentRoomIndex, setCurrentRoomIndex] = useState(0);
   const [overallNotes, setOverallNotes] = useState('');
   const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [showAddRoomModal, setShowAddRoomModal] = useState(false);
+  const [newRoomName, setNewRoomName] = useState('');
+  const [newRoomIcon, setNewRoomIcon] = useState('Home');
+  const [newRoomColor, setNewRoomColor] = useState('#3B82F6');
   const [showCamera, setShowCamera] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [cameraFacing, setCameraFacing] = useState<'back' | 'front'>('back');
@@ -419,15 +423,40 @@ export default function QuickStartSnapshotScreen() {
   };
 
   const handleFinalizeSnapshot = async () => {
-    if (!snapshotId) return;
+    if (!snapshotId || !propertyId) return;
 
     try {
       await completeSnapshot(snapshotId);
+      
+      const { addPlanItem } = await import('@/hooks/subscription-store').then(m => m.useSubscription());
+      
+      if (currentUser) {
+        await addPlanItem(
+          propertyId as string,
+          {
+            title: 'QuickStart Snapshot Completed',
+            description: `Comprehensive property inspection with ${totalPhotos} photos across ${completedRooms} rooms. Overall score: ${Math.round(rooms.reduce((sum, r) => sum + r.score, 0) / rooms.length)}/100`,
+            category: 'inspection',
+            priority: 'medium',
+            year: new Date().getFullYear(),
+            month: new Date().getMonth() + 1,
+            status: 'completed',
+            completedDate: new Date().toISOString(),
+            notes: overallNotes,
+            createdBy: currentUser.id,
+            createdByRole: currentUser.role,
+          },
+          currentUser.id,
+          currentUser.name,
+          currentUser.role
+        );
+      }
+      
       setShowCompletionModal(false);
       
       Alert.alert(
         'QuickStart Complete!',
-        `Snapshot saved with ${totalPhotos} photos across ${completedRooms} rooms. The report is now available in the property blueprint.`,
+        `Snapshot saved with ${totalPhotos} photos across ${completedRooms} rooms. The report has been added to the property blueprint timeline.`,
         [
           { text: 'View Blueprint', onPress: () => {
             router.back();
@@ -446,6 +475,46 @@ export default function QuickStartSnapshotScreen() {
     const IconComponent = (Icons as any)[iconName];
     return IconComponent || Icons.Home;
   };
+
+  const handleAddCustomRoom = () => {
+    if (!newRoomName.trim()) {
+      Alert.alert('Required', 'Please enter a room name');
+      return;
+    }
+
+    const newRoom: RoomProgress = {
+      id: `custom-${Date.now()}`,
+      name: newRoomName,
+      icon: newRoomIcon,
+      color: newRoomColor,
+      photos: [],
+      audioNotes: [],
+      notes: '',
+      score: 85,
+      appliances: [],
+      completed: false,
+    };
+
+    setRooms([...rooms, newRoom]);
+    setNewRoomName('');
+    setNewRoomIcon('Home');
+    setNewRoomColor('#3B82F6');
+    setShowAddRoomModal(false);
+    Alert.alert('Success', `${newRoomName} added to inspection`);
+  };
+
+  const AVAILABLE_ICONS = [
+    { name: 'Home', color: '#3B82F6' },
+    { name: 'Bed', color: '#8B5CF6' },
+    { name: 'Bath', color: '#10B981' },
+    { name: 'ChefHat', color: '#F59E0B' },
+    { name: 'Sofa', color: '#EC4899' },
+    { name: 'Car', color: '#6B7280' },
+    { name: 'Warehouse', color: '#14B8A6' },
+    { name: 'Trees', color: '#22C55E' },
+    { name: 'Droplets', color: '#06B6D4' },
+    { name: 'Flame', color: '#EF4444' },
+  ];
 
   const IconComponent = getIconComponent(currentRoom.icon);
 
@@ -537,7 +606,16 @@ export default function QuickStartSnapshotScreen() {
         </View>
 
         <View style={styles.roomGrid}>
-          <Text style={styles.sectionTitle}>All Rooms</Text>
+          <View style={styles.roomGridHeader}>
+            <Text style={styles.sectionTitle}>All Rooms</Text>
+            <TouchableOpacity
+              style={styles.addRoomButton}
+              onPress={() => setShowAddRoomModal(true)}
+            >
+              <Icons.Plus size={16} color="white" />
+              <Text style={styles.addRoomButtonText}>Add Room</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.roomGridContainer}>
             {rooms.map((room, index) => {
               const RoomIcon = getIconComponent(room.icon);
@@ -935,6 +1013,68 @@ export default function QuickStartSnapshotScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={showAddRoomModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAddRoomModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.addRoomModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Custom Room</Text>
+              <TouchableOpacity onPress={() => setShowAddRoomModal(false)}>
+                <Icons.X size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.addRoomForm}>
+              <Text style={styles.inputLabel}>Room Name</Text>
+              <TextInput
+                style={styles.roomNameInput}
+                placeholder="e.g., Laundry Room, Office, Basement"
+                placeholderTextColor="#9CA3AF"
+                value={newRoomName}
+                onChangeText={setNewRoomName}
+                autoFocus
+              />
+
+              <Text style={styles.inputLabel}>Icon</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.iconSelector}>
+                {AVAILABLE_ICONS.map((icon) => {
+                  const IconComp = getIconComponent(icon.name);
+                  const isSelected = newRoomIcon === icon.name;
+                  return (
+                    <TouchableOpacity
+                      key={icon.name}
+                      style={[
+                        styles.iconOption,
+                        { backgroundColor: icon.color + '20' },
+                        isSelected && { borderColor: icon.color, borderWidth: 2 }
+                      ]}
+                      onPress={() => {
+                        setNewRoomIcon(icon.name);
+                        setNewRoomColor(icon.color);
+                      }}
+                    >
+                      <IconComp size={24} color={icon.color} />
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <TouchableOpacity
+                style={styles.addRoomSubmitButton}
+                onPress={handleAddCustomRoom}
+              >
+                <Icons.Plus size={20} color="white" />
+                <Text style={styles.addRoomSubmitButtonText}>Add Room</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1104,6 +1244,26 @@ const styles = StyleSheet.create({
   },
   roomGrid: {
     padding: 16,
+  },
+  roomGridHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  addRoomButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.teal,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  addRoomButtonText: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: 'white',
   },
   roomGridContainer: {
     flexDirection: 'row',
@@ -1680,6 +1840,59 @@ const styles = StyleSheet.create({
   },
   completionSubmitButtonText: {
     fontSize: 15,
+    fontWeight: '700' as const,
+    color: 'white',
+  },
+  addRoomModalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '70%',
+  },
+  addRoomForm: {
+    padding: 20,
+    gap: 16,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: '#111827',
+    marginBottom: 8,
+  },
+  roomNameInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    color: '#111827',
+  },
+  iconSelector: {
+    flexDirection: 'row',
+  },
+  iconOption: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  addRoomSubmitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.teal,
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  addRoomSubmitButtonText: {
+    fontSize: 16,
     fontWeight: '700' as const,
     color: 'white',
   },
