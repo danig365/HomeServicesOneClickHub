@@ -27,17 +27,25 @@ import {
   Package,
   Shield,
   Calendar,
+  FileText,
+  ClipboardList,
+  CheckCircle,
+  XCircle,
+  Clock,
+  AlertCircle,
 } from 'lucide-react-native';
 import { Service } from '@/types/service';
 import { User } from '@/types/user';
 import { useProperties } from '@/hooks/properties-store';
 import { useSubscription } from '@/hooks/subscription-store';
+import { useUserRequests } from '@/hooks/user-requests-store';
+import { UserRequest, RequestStatus } from '@/types/user-request';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const TEAL = '#14B8A6';
 const CREAM = '#FFF8E7';
 
-type TabType = 'services' | 'users' | 'subscriptions' | 'techs';
+type TabType = 'services' | 'users' | 'subscriptions' | 'techs' | 'requests' | 'blueprints';
 
 const SERVICES_STORAGE_KEY = 'hudson_services';
 
@@ -45,9 +53,10 @@ export default function AdminPortal() {
   const { user, getAllUsers, updateUserRole, deleteUser } = useAuth();
   const { properties } = useProperties();
   const { subscriptions, createSubscription, cancelSubscription } = useSubscription();
+  const { requests, getRequestStats, updateRequestStatus, assignTech, deleteRequest } = useUserRequests();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState<TabType>('services');
+  const [activeTab, setActiveTab] = useState<TabType>('requests');
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [services, setServices] = useState<Service[]>([]);
@@ -94,6 +103,8 @@ export default function AdminPortal() {
   }
 
   const tabs = [
+    { id: 'requests' as const, label: 'User Requests', icon: ClipboardList },
+    { id: 'blueprints' as const, label: 'Blueprints', icon: FileText },
     { id: 'services' as const, label: 'Services', icon: Store },
     { id: 'users' as const, label: 'Users', icon: Users },
     { id: 'subscriptions' as const, label: 'Subscriptions', icon: CreditCard },
@@ -131,6 +142,49 @@ export default function AdminPortal() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {activeTab === 'requests' && (
+          <UserRequestsTab
+            requests={requests}
+            users={allUsers}
+            onUpdateStatus={async (requestId, status, notes) => {
+              if (!user) return;
+              await updateRequestStatus(requestId, status, user.id, user.name, notes);
+              Alert.alert('Success', 'Request status updated');
+            }}
+            onAssignTech={async (requestId, techId, techName) => {
+              await assignTech(requestId, techId, techName);
+              Alert.alert('Success', 'Tech assigned');
+            }}
+            onDelete={async (requestId) => {
+              Alert.alert(
+                'Delete Request',
+                'Are you sure you want to delete this request?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                      await deleteRequest(requestId);
+                      Alert.alert('Success', 'Request deleted');
+                    },
+                  },
+                ]
+              );
+            }}
+          />
+        )}
+
+        {activeTab === 'blueprints' && (
+          <BlueprintsTab
+            properties={properties}
+            subscriptions={subscriptions}
+            onViewBlueprint={(propertyId) => {
+              router.push('/blueprint');
+            }}
+          />
+        )}
+
         {activeTab === 'services' && (
           <ServicesTab
             services={services}
@@ -705,6 +759,231 @@ function ServiceModal({
   );
 }
 
+function UserRequestsTab({
+  requests,
+  users,
+  onUpdateStatus,
+  onAssignTech,
+  onDelete,
+}: {
+  requests: UserRequest[];
+  users: User[];
+  onUpdateStatus: (requestId: string, status: RequestStatus, notes?: string) => void;
+  onAssignTech: (requestId: string, techId: string, techName: string) => void;
+  onDelete: (requestId: string) => void;
+}) {
+  const stats = useMemo(() => {
+    return {
+      total: requests.length,
+      pending: requests.filter(r => r.status === 'pending').length,
+      inReview: requests.filter(r => r.status === 'in-review').length,
+      approved: requests.filter(r => r.status === 'approved').length,
+      completed: requests.filter(r => r.status === 'completed').length,
+    };
+  }, [requests]);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return '#F59E0B';
+      case 'in-review': return '#3B82F6';
+      case 'approved': return '#10B981';
+      case 'completed': return '#6B7280';
+      case 'rejected': return '#EF4444';
+      default: return '#9CA3AF';
+    }
+  };
+
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case 'custom_service': return 'Custom Service';
+      case 'blueprint_modification': return 'Blueprint Mod';
+      case 'maintenance_support': return 'Support';
+      case 'general_inquiry': return 'Inquiry';
+      default: return type;
+    }
+  };
+
+  return (
+    <View style={styles.tabContent}>
+      <View style={styles.statsGrid}>
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{stats.total}</Text>
+          <Text style={styles.statLabel}>Total</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={[styles.statValue, { color: '#F59E0B' }]}>{stats.pending}</Text>
+          <Text style={styles.statLabel}>Pending</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={[styles.statValue, { color: '#3B82F6' }]}>{stats.inReview}</Text>
+          <Text style={styles.statLabel}>In Review</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={[styles.statValue, { color: '#10B981' }]}>{stats.approved}</Text>
+          <Text style={styles.statLabel}>Approved</Text>
+        </View>
+      </View>
+
+      {requests.length === 0 ? (
+        <View style={styles.emptyState}>
+          <ClipboardList size={48} color="#D1D5DB" />
+          <Text style={styles.emptyStateText}>No requests yet</Text>
+        </View>
+      ) : (
+        requests.map((request) => (
+          <View key={request.id} style={styles.requestCard}>
+            <View style={styles.requestHeader}>
+              <View style={styles.requestInfo}>
+                <Text style={styles.requestTitle}>{request.title}</Text>
+                <Text style={styles.requestUser}>{request.userName} • {request.propertyName}</Text>
+              </View>
+              <View style={styles.requestBadges}>
+                <View style={[styles.typeBadge, { backgroundColor: TEAL + '20' }]}>
+                  <Text style={[styles.typeBadgeText, { color: TEAL }]}>
+                    {getTypeLabel(request.type)}
+                  </Text>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(request.status) }]}>
+                  <Text style={styles.statusBadgeText}>{request.status.toUpperCase()}</Text>
+                </View>
+              </View>
+            </View>
+
+            <Text style={styles.requestDescription} numberOfLines={2}>{request.description}</Text>
+
+            {request.estimatedCost && (
+              <View style={styles.requestMeta}>
+                <DollarSign size={14} color="#6B7280" />
+                <Text style={styles.requestMetaText}>{request.estimatedCost}</Text>
+              </View>
+            )}
+
+            <View style={styles.requestActions}>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => {
+                  Alert.alert('Update Status', 'Select new status', [
+                    { text: 'Pending', onPress: () => onUpdateStatus(request.id, 'pending') },
+                    { text: 'In Review', onPress: () => onUpdateStatus(request.id, 'in-review') },
+                    { text: 'Approved', onPress: () => onUpdateStatus(request.id, 'approved') },
+                    { text: 'Completed', onPress: () => onUpdateStatus(request.id, 'completed') },
+                    { text: 'Rejected', onPress: () => onUpdateStatus(request.id, 'rejected') },
+                    { text: 'Cancel', style: 'cancel' },
+                  ]);
+                }}
+              >
+                <CheckCircle size={16} color={TEAL} />
+                <Text style={styles.actionBtnText}>Status</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => {
+                  const techs = users.filter(u => u.role === 'tech');
+                  Alert.alert(
+                    'Assign Tech',
+                    'Select a tech',
+                    [
+                      ...techs.map(tech => ({
+                        text: tech.name,
+                        onPress: () => onAssignTech(request.id, tech.id, tech.name),
+                      })),
+                      { text: 'Cancel', style: 'cancel' },
+                    ]
+                  );
+                }}
+              >
+                <UserCog size={16} color={TEAL} />
+                <Text style={styles.actionBtnText}>Assign</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => onDelete(request.id)}
+              >
+                <Trash2 size={16} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))
+      )}
+    </View>
+  );
+}
+
+function BlueprintsTab({
+  properties,
+  subscriptions,
+  onViewBlueprint,
+}: {
+  properties: any[];
+  subscriptions: Record<string, any>;
+  onViewBlueprint: (propertyId: string) => void;
+}) {
+  const propertiesWithBlueprints = properties.filter(p => subscriptions[p.id]?.blueprint);
+
+  return (
+    <View style={styles.tabContent}>
+      <Text style={styles.sectionTitle}>Property Blueprints</Text>
+
+      {propertiesWithBlueprints.length === 0 ? (
+        <View style={styles.emptyState}>
+          <FileText size={48} color="#D1D5DB" />
+          <Text style={styles.emptyStateText}>No blueprints yet</Text>
+        </View>
+      ) : (
+        propertiesWithBlueprints.map((property) => {
+          const subscription = subscriptions[property.id];
+          const blueprint = subscription?.blueprint;
+          const planItems = blueprint?.fiveYearPlan?.items || [];
+          const customProjects = blueprint?.customProjects || [];
+
+          return (
+            <View key={property.id} style={styles.blueprintCard}>
+              <View style={styles.blueprintHeader}>
+                <View>
+                  <Text style={styles.propertyName}>{property.name}</Text>
+                  <Text style={styles.propertyAddress}>{property.address}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.viewButton}
+                  onPress={() => onViewBlueprint(property.id)}
+                >
+                  <FileText size={16} color={TEAL} />
+                  <Text style={styles.viewButtonText}>View</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.blueprintStats}>
+                <View style={styles.blueprintStat}>
+                  <Text style={styles.blueprintStatValue}>{planItems.length}</Text>
+                  <Text style={styles.blueprintStatLabel}>Plan Items</Text>
+                </View>
+                <View style={styles.blueprintStat}>
+                  <Text style={styles.blueprintStatValue}>{customProjects.length}</Text>
+                  <Text style={styles.blueprintStatLabel}>Projects</Text>
+                </View>
+                <View style={styles.blueprintStat}>
+                  <Text style={styles.blueprintStatValue}>
+                    {planItems.filter((i: any) => i.status === 'completed').length}
+                  </Text>
+                  <Text style={styles.blueprintStatLabel}>Completed</Text>
+                </View>
+              </View>
+
+              {blueprint?.updatedAt && (
+                <Text style={styles.blueprintUpdated}>
+                  Updated: {new Date(blueprint.updatedAt).toLocaleDateString()}
+                </Text>
+              )}
+            </View>
+          );
+        })
+      )}
+    </View>
+  );
+}
+
 function getRoleBadgeColor(role: string) {
   switch (role) {
     case 'admin':
@@ -1179,5 +1458,139 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600' as const,
     color: CREAM,
+  },
+  requestCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  requestHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  requestInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  requestTitle: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  requestUser: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  requestBadges: {
+    gap: 6,
+  },
+  typeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  typeBadgeText: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+  },
+  requestDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  requestMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 12,
+  },
+  requestMetaText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '600' as const,
+  },
+  requestActions: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+  },
+  actionBtnText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: '#1F2937',
+  },
+  blueprintCard: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  blueprintHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  viewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: TEAL + '20',
+    borderRadius: 8,
+  },
+  viewButtonText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: TEAL,
+  },
+  blueprintStats: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 12,
+  },
+  blueprintStat: {
+    alignItems: 'center',
+  },
+  blueprintStatValue: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: TEAL,
+    marginBottom: 2,
+  },
+  blueprintStatLabel: {
+    fontSize: 11,
+    color: '#6B7280',
+  },
+  blueprintUpdated: {
+    fontSize: 12,
+    color: '#9CA3AF',
   },
 });

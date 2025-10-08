@@ -11,6 +11,7 @@ import { UserProvider } from "@/hooks/user-store";
 import { TechAppointmentsProvider } from "@/hooks/tech-appointments-store";
 import { SnapshotProvider } from "@/hooks/snapshot-store";
 import { AuthProvider, useAuth } from "@/hooks/auth-store";
+import { UserRequestsProvider } from "@/hooks/user-requests-store";
 import { ActivityIndicator, View, StyleSheet } from "react-native";
 import { trpc, trpcReactClient } from "@/lib/trpc";
 
@@ -157,6 +158,12 @@ function RootLayoutNav() {
           title: "Admin Dashboard",
         }} 
       />
+      <Stack.Screen 
+        name="admin-portal" 
+        options={{ 
+          title: "Admin Portal",
+        }} 
+      />
     </Stack>
   );
 }
@@ -179,17 +186,19 @@ export default function RootLayout() {
             <UserProvider>
               <PropertiesProvider>
                 <SubscriptionProvider>
-                  <TechAppointmentsProvider>
-                    <SnapshotProvider>
-                      <CartProvider>
-                        <BookingsProvider>
-                          <VaultProvider>
-                            <RootLayoutNav />
-                          </VaultProvider>
-                        </BookingsProvider>
-                      </CartProvider>
-                    </SnapshotProvider>
-                  </TechAppointmentsProvider>
+                  <UserRequestsProvider>
+                    <TechAppointmentsProvider>
+                      <SnapshotProvider>
+                        <CartProvider>
+                          <BookingsProvider>
+                            <VaultProvider>
+                              <RootLayoutNav />
+                            </VaultProvider>
+                          </BookingsProvider>
+                        </CartProvider>
+                      </SnapshotProvider>
+                    </TechAppointmentsProvider>
+                  </UserRequestsProvider>
                 </SubscriptionProvider>
               </PropertiesProvider>
             </UserProvider>
