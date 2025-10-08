@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Icons from 'lucide-react-native';
@@ -7,6 +7,7 @@ import { useProperties } from '@/hooks/properties-store';
 import { useTechAppointments } from '@/hooks/tech-appointments-store';
 import { useSnapshots } from '@/hooks/snapshot-store';
 import { useUser } from '@/hooks/user-store';
+import { useSubscription } from '@/hooks/subscription-store';
 import { COLORS } from '@/constants/colors';
 import { Property } from '@/types/property';
 import { TechAppointment, SnapshotInspection } from '@/types/tech-appointment';
@@ -20,18 +21,23 @@ interface PropertyWithData {
   upcomingAppointments: number;
   totalSnapshots: number;
   completedSnapshots: number;
+  hasBlueprint: boolean;
+  blueprintItemsCount: number;
+  clientRequestsCount: number;
 }
 
 export default function TechPropertiesViewScreen() {
   const insets = useSafeAreaInsets();
   const { properties } = useProperties();
   const { appointments, getAppointmentsByProperty } = useTechAppointments();
-  const { snapshots, getSnapshotsByProperty } = useSnapshots();
+  const { snapshots, getSnapshotsByProperty, createSnapshot } = useSnapshots();
   const { currentUser } = useUser();
+  const { getSubscription } = useSubscription();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedPropertyId, setExpandedPropertyId] = useState<string | null>(null);
-  const [filterType, setFilterType] = useState<'all' | 'appointments' | 'snapshots'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'appointments' | 'snapshots' | 'blueprints'>('all');
+  const [showQuickStartModal, setShowQuickStartModal] = useState(false);
 
   const isTech = currentUser?.role === 'tech';
   const techId = isTech ? currentUser?.id : undefined;
@@ -53,6 +59,12 @@ export default function TechPropertiesViewScreen() {
 
       const completedSnapshots = propertySnapshots.filter(snap => snap.completedAt).length;
 
+      const subscription = getSubscription(property.id);
+      const blueprint = subscription?.blueprint;
+      const hasBlueprint = !!blueprint;
+      const blueprintItemsCount = blueprint?.fiveYearPlan?.items.length || 0;
+      const clientRequestsCount = (blueprint?.customProjects.length || 0) + (blueprint?.monthlyVisitRequests.length || 0);
+
       return {
         property,
         appointments: propertyAppointments,
@@ -62,9 +74,12 @@ export default function TechPropertiesViewScreen() {
         upcomingAppointments,
         totalSnapshots: propertySnapshots.length,
         completedSnapshots,
+        hasBlueprint,
+        blueprintItemsCount,
+        clientRequestsCount,
       };
     });
-  }, [properties, appointments, snapshots, techId, getAppointmentsByProperty, getSnapshotsByProperty]);
+  }, [properties, appointments, snapshots, techId, getAppointmentsByProperty, getSnapshotsByProperty, getSubscription]);
 
   const filteredProperties = useMemo(() => {
     return propertiesWithData.filter(item => {
@@ -82,10 +97,33 @@ export default function TechPropertiesViewScreen() {
       if (filterType === 'snapshots' && item.totalSnapshots === 0) {
         return false;
       }
+      if (filterType === 'blueprints' && !item.hasBlueprint) {
+        return false;
+      }
 
       return true;
     });
   }, [propertiesWithData, searchQuery, filterType]);
+
+  const handleQuickStartSnapshot = async (property: Property) => {
+    const techId = isTech ? currentUser?.id : undefined;
+    if (!techId) {
+      Alert.alert('Error', 'No tech available');
+      return;
+    }
+
+    try {
+      const snapshot = await createSnapshot(techId, property.id);
+      console.log('Created standalone snapshot:', snapshot);
+      setShowQuickStartModal(false);
+      setTimeout(() => {
+        router.push(`/snapshot-inspection/${snapshot.id}` as any);
+      }, 100);
+    } catch (error) {
+      console.error('Failed to create snapshot:', error);
+      Alert.alert('Error', 'Failed to start snapshot inspection');
+    }
+  };
 
   const togglePropertyExpansion = (propertyId: string) => {
     setExpandedPropertyId(expandedPropertyId === propertyId ? null : propertyId);
@@ -196,7 +234,17 @@ export default function TechPropertiesViewScreen() {
         )}
       </View>
 
-      <View style={styles.filterContainer}>
+      <View style={styles.quickActionsRow}>
+        <TouchableOpacity
+          style={styles.quickActionButton}
+          onPress={() => setShowQuickStartModal(true)}
+        >
+          <Icons.Zap size={20} color="white" />
+          <Text style={styles.quickActionText}>QuickStart</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
         <TouchableOpacity
           style={[styles.filterButton, filterType === 'all' && styles.filterButtonActive]}
           onPress={() => setFilterType('all')}
@@ -221,7 +269,15 @@ export default function TechPropertiesViewScreen() {
             Snapshots
           </Text>
         </TouchableOpacity>
-      </View>
+        <TouchableOpacity
+          style={[styles.filterButton, filterType === 'blueprints' && styles.filterButtonActive]}
+          onPress={() => setFilterType('blueprints')}
+        >
+          <Text style={[styles.filterText, filterType === 'blueprints' && styles.filterTextActive]}>
+            Blueprints
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
 
       <ScrollView style={styles.scrollView}>
         <View style={styles.section}>
@@ -262,6 +318,12 @@ export default function TechPropertiesViewScreen() {
                           <Icons.Camera size={12} color="#F59E0B" />
                           <Text style={styles.metaBadgeText}>{item.totalSnapshots}</Text>
                         </View>
+                        {item.hasBlueprint && (
+                          <View style={styles.metaBadge}>
+                            <Icons.FileText size={12} color="#8B5CF6" />
+                            <Text style={styles.metaBadgeText}>Blueprint</Text>
+                          </View>
+                        )}
                         {item.upcomingAppointments > 0 && (
                           <View style={[styles.metaBadge, styles.metaBadgeHighlight]}>
                             <Icons.Clock size={12} color="#10B981" />
@@ -286,6 +348,44 @@ export default function TechPropertiesViewScreen() {
 
                   {isExpanded && (
                     <View style={styles.expandedContent}>
+                      {item.hasBlueprint && (
+                        <View style={styles.dataSection}>
+                          <View style={styles.dataSectionHeader}>
+                            <Icons.FileText size={18} color="#8B5CF6" />
+                            <Text style={styles.dataSectionTitle}>Blueprint & Client Requests</Text>
+                          </View>
+                          <TouchableOpacity
+                            style={styles.blueprintCard}
+                            onPress={() => router.push('/blueprint' as any)}
+                          >
+                            <View style={styles.blueprintHeader}>
+                              <View style={styles.blueprintIconBadge}>
+                                <Icons.FileText size={20} color="#8B5CF6" />
+                              </View>
+                              <View style={styles.blueprintInfo}>
+                                <Text style={styles.blueprintTitle}>5-Year Property Plan</Text>
+                                <Text style={styles.blueprintSubtitle}>
+                                  {item.blueprintItemsCount} timeline items
+                                </Text>
+                              </View>
+                              <Icons.ChevronRight size={20} color="#9CA3AF" />
+                            </View>
+                          </TouchableOpacity>
+                          {item.clientRequestsCount > 0 && (
+                            <View style={styles.clientRequestsCard}>
+                              <View style={styles.clientRequestsHeader}>
+                                <Icons.MessageSquare size={16} color="#F59E0B" />
+                                <Text style={styles.clientRequestsTitle}>
+                                  Client Requests ({item.clientRequestsCount})
+                                </Text>
+                              </View>
+                              <Text style={styles.clientRequestsText}>
+                                Custom projects and monthly visit requests from homeowner
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
                       {item.appointments.length > 0 && (
                         <View style={styles.dataSection}>
                           <View style={styles.dataSectionHeader}>
@@ -411,6 +511,59 @@ export default function TechPropertiesViewScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showQuickStartModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowQuickStartModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.quickStartModalHeader}>
+                <Icons.Zap size={24} color="#F59E0B" />
+                <Text style={styles.modalTitle}>QuickStart Snapshot</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowQuickStartModal(false)}>
+                <Icons.X size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScroll}>
+              <Text style={styles.quickStartDescription}>
+                Start a MyHome Snapshot inspection immediately. Select a property to begin.
+              </Text>
+
+              <View style={styles.propertiesList}>
+                {filteredProperties.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Icons.Home size={48} color="#D1D5DB" />
+                    <Text style={styles.emptyText}>No properties available</Text>
+                  </View>
+                ) : (
+                  filteredProperties.map((item) => (
+                    <TouchableOpacity
+                      key={item.property.id}
+                      style={styles.quickStartPropertyCard}
+                      onPress={() => handleQuickStartSnapshot(item.property)}
+                    >
+                      <View style={styles.quickStartPropertyInfo}>
+                        <Icons.Home size={20} color={COLORS.teal} />
+                        <View style={styles.quickStartPropertyDetails}>
+                          <Text style={styles.quickStartPropertyName}>{item.property.name}</Text>
+                          <Text style={styles.quickStartPropertyAddress}>{item.property.address}</Text>
+                        </View>
+                      </View>
+                      <Icons.ChevronRight size={20} color="#9CA3AF" />
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -741,5 +894,161 @@ const styles = StyleSheet.create({
   noDataText: {
     fontSize: 14,
     color: '#9CA3AF',
+  },
+  quickActionsRow: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  quickActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#F59E0B',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  quickActionText: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: 'white',
+  },
+  blueprintCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 8,
+  },
+  blueprintHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  blueprintIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3E8FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  blueprintInfo: {
+    flex: 1,
+  },
+  blueprintTitle: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: '#111827',
+    marginBottom: 2,
+  },
+  blueprintSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  clientRequestsCard: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  clientRequestsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  clientRequestsTitle: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: '#92400E',
+  },
+  clientRequestsText: {
+    fontSize: 13,
+    color: '#78350F',
+    lineHeight: 18,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: '#111827',
+  },
+  modalScroll: {
+    padding: 20,
+  },
+  quickStartModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  quickStartDescription: {
+    fontSize: 15,
+    color: '#6B7280',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  propertiesList: {
+    gap: 12,
+  },
+  quickStartPropertyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  quickStartPropertyInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  quickStartPropertyDetails: {
+    flex: 1,
+  },
+  quickStartPropertyName: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: '#111827',
+    marginBottom: 2,
+  },
+  quickStartPropertyAddress: {
+    fontSize: 13,
+    color: '#6B7280',
   },
 });
