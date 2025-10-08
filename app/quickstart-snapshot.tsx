@@ -8,6 +8,7 @@ import { Audio } from 'expo-av';
 import { useProperties } from '@/hooks/properties-store';
 import { useSnapshots } from '@/hooks/snapshot-store';
 import { useUser } from '@/hooks/user-store';
+import { useSubscription } from '@/hooks/subscription-store';
 import { COLORS } from '@/constants/colors';
 import { MediaNote, ApplianceDetail } from '@/types/tech-appointment';
 
@@ -43,6 +44,7 @@ export default function QuickStartSnapshotScreen() {
   const { properties } = useProperties();
   const { createSnapshot, addRoomInspection, updateRoomInspection, completeSnapshot } = useSnapshots();
   const { currentUser } = useUser();
+  const { addPlanItem } = useSubscription();
 
   const property = properties.find(p => p.id === propertyId);
 
@@ -427,8 +429,6 @@ export default function QuickStartSnapshotScreen() {
 
     try {
       await completeSnapshot(snapshotId);
-      
-      const { addPlanItem } = await import('@/hooks/subscription-store').then(m => m.useSubscription());
       
       if (currentUser) {
         const avgScore = Math.round(rooms.reduce((sum, r) => sum + r.score, 0) / rooms.length);
