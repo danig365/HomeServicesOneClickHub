@@ -41,7 +41,7 @@ export default function ProfileScreen() {
   ];
 
   const adminMenuItem = [
-    { icon: Shield, label: 'Admin Dashboard', onPress: () => router.push('/admin-dashboard'), highlight: true },
+    { icon: Shield, label: 'Admin Portal', onPress: () => router.push('/admin-portal'), highlight: true },
   ];
 
   return (
