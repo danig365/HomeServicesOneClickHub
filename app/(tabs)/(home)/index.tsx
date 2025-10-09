@@ -128,7 +128,7 @@ export default function HomeScreen() {
       activeOpacity={0.9}
     >
       <LinearGradient
-        colors={['#D4AF37', '#B8941F']}
+        colors={[COLORS.gold, COLORS.darkGold]}
         style={styles.callButtonGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -168,7 +168,7 @@ export default function HomeScreen() {
         >
           <View style={styles.subscriptionHeader}>
             <View style={styles.subscriptionHeaderLeft}>
-              <Icons.Award size={26} color="#D4AF37" />
+              <Icons.Award size={26} color={COLORS.gold} />
               <View>
                 <Text style={styles.subscriptionTitle}>MyHome Subscription</Text>
                 <Text style={styles.subscriptionSubtitle}>Active • ${subscription.monthlyPrice}/month</Text>
@@ -183,7 +183,7 @@ export default function HomeScreen() {
 
           <View style={styles.nextVisitCard}>
             <View style={styles.nextVisitHeader}>
-              <Icons.Calendar size={16} color="#D4AF37" />
+              <Icons.Calendar size={16} color={COLORS.gold} />
               <Text style={styles.nextVisitTitle}>Next Hudson Visit</Text>
             </View>
             <Text style={styles.nextVisitDate}>{formatDate(nextVisit.scheduledDate)}</Text>
@@ -527,10 +527,10 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A2F2F',
+    backgroundColor: COLORS.teal,
   },
   safeArea: {
-    backgroundColor: '#1A2F2F',
+    backgroundColor: COLORS.teal,
   },
   heroSection: {
     paddingHorizontal: 20,
@@ -758,7 +758,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   popularButton: {
-    backgroundColor: COLORS.accent.success,
+    backgroundColor: COLORS.accent,
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -1019,7 +1019,7 @@ const styles = StyleSheet.create({
   nextVisitDate: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#D4AF37',
+    color: COLORS.gold,
     marginBottom: 10,
   },
   visitProgress: {
@@ -1036,7 +1036,7 @@ const styles = StyleSheet.create({
   },
   visitProgressFill: {
     height: '100%',
-    backgroundColor: '#D4AF37',
+    backgroundColor: COLORS.gold,
     borderRadius: 3,
   },
   visitProgressText: {

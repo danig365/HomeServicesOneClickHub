@@ -1,14 +1,15 @@
 export const COLORS = {
-  teal: '#5A7F7F',
+  teal: '#0D3135',
   cream: '#FAF8F3',
-  darkTeal: '#4A6B6B',
+  darkTeal: '#0A2528',
   lightCream: '#FEFDFB',
-  gold: '#D4AF37',
-  darkGold: '#B8941F',
+  gold: '#AB9380',
+  darkGold: '#8B7660',
+  accent: '#4A7D83',
   white: '#FFFFFF',
   text: {
-    primary: '#2C3E3E',
-    secondary: '#6B7F7F',
+    primary: '#0D3135',
+    secondary: '#4A7D83',
     light: '#8B9B9B',
   },
   background: {
@@ -16,9 +17,16 @@ export const COLORS = {
     secondary: '#F5F3EE',
     card: '#FFFFFF',
   },
-  accent: {
+  accentColors: {
     success: '#10B981',
     warning: '#F59E0B',
     error: '#EF4444',
   },
 } as const;
+
+// Legacy support - will be removed
+export const accent = {
+  success: '#10B981',
+  warning: '#F59E0B',
+  error: '#EF4444',
+};

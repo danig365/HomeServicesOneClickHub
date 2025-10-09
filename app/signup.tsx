@@ -14,11 +14,13 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/auth-store';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Lock, Mail, User, Phone } from 'lucide-react-native';
+import { Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const TEAL = '#14B8A6';
+const TEAL = '#0D3135';
 const CREAM = '#FFF8E7';
-const DARK_TEAL = '#0F766E';
+const DARK_TEAL = '#0A2528';
+const ACCENT = '#4A7D83';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -69,7 +71,11 @@ export default function SignupScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <Text style={styles.logo}>HUDSON</Text>
+            <Image 
+              source={{ uri: 'https://hudsoniowa.com/HMHTMLOGO.svg' }} 
+              style={styles.logo}
+              resizeMode="contain"
+            />
             <Text style={styles.tagline}>Premium Home Care</Text>
           </View>
 
@@ -85,7 +91,7 @@ export default function SignupScreen() {
 
             <View style={styles.inputContainer}>
               <View style={styles.inputWrapper}>
-                <User size={20} color={TEAL} style={styles.inputIcon} />
+                <User size={20} color={ACCENT} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Full Name"
@@ -97,7 +103,7 @@ export default function SignupScreen() {
               </View>
 
               <View style={styles.inputWrapper}>
-                <Mail size={20} color={TEAL} style={styles.inputIcon} />
+                <Mail size={20} color={ACCENT} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Email"
@@ -111,7 +117,7 @@ export default function SignupScreen() {
               </View>
 
               <View style={styles.inputWrapper}>
-                <Phone size={20} color={TEAL} style={styles.inputIcon} />
+                <Phone size={20} color={ACCENT} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Phone Number"
@@ -124,7 +130,7 @@ export default function SignupScreen() {
               </View>
 
               <View style={styles.inputWrapper}>
-                <Lock size={20} color={TEAL} style={styles.inputIcon} />
+                <Lock size={20} color={ACCENT} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Password"
@@ -137,7 +143,7 @@ export default function SignupScreen() {
               </View>
 
               <View style={styles.inputWrapper}>
-                <Lock size={20} color={TEAL} style={styles.inputIcon} />
+                <Lock size={20} color={ACCENT} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Confirm Password"
@@ -195,10 +201,9 @@ const styles = StyleSheet.create({
     marginBottom: 48,
   },
   logo: {
-    fontSize: 48,
-    fontWeight: '900' as const,
-    color: CREAM,
-    letterSpacing: 2,
+    width: 200,
+    height: 80,
+    marginBottom: 8,
   },
   tagline: {
     fontSize: 16,
@@ -285,7 +290,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   loginLink: {
-    color: TEAL,
+    color: ACCENT,
     fontSize: 14,
     fontWeight: '700' as const,
   },

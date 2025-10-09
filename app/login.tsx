@@ -14,11 +14,14 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/auth-store';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Lock, Mail, Wifi, WifiOff } from 'lucide-react-native';
+import { Image } from 'react-native';
 import Constants from 'expo-constants';
 
-const TEAL = '#14B8A6';
+const TEAL = '#0D3135';
 const CREAM = '#FFF8E7';
-const DARK_TEAL = '#0F766E';
+const DARK_TEAL = '#0A2528';
+const GOLD = '#AB9380';
+const ACCENT = '#4A7D83';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -226,7 +229,11 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <Text style={styles.logo}>HUDSON</Text>
+            <Image 
+              source={{ uri: 'https://hudsoniowa.com/HMHTMLOGO.svg' }} 
+              style={styles.logo}
+              resizeMode="contain"
+            />
             <Text style={styles.tagline}>Premium Home Care</Text>
           </View>
 
@@ -243,7 +250,7 @@ export default function LoginScreen() {
               {backendStatus === 'checking' ? (
                 <ActivityIndicator size="small" color={TEAL} />
               ) : backendStatus === 'online' ? (
-                <Wifi size={16} color="#10B981" />
+                <Wifi size={16} color={ACCENT} />
               ) : (
                 <WifiOff size={16} color="#EF4444" />
               )}
@@ -290,7 +297,7 @@ export default function LoginScreen() {
 
             <View style={styles.inputContainer}>
               <View style={styles.inputWrapper}>
-                <Mail size={20} color={TEAL} style={styles.inputIcon} />
+                <Mail size={20} color={ACCENT} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Email"
@@ -304,7 +311,7 @@ export default function LoginScreen() {
               </View>
 
               <View style={styles.inputWrapper}>
-                <Lock size={20} color={TEAL} style={styles.inputIcon} />
+                <Lock size={20} color={ACCENT} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Password"
@@ -411,10 +418,9 @@ const styles = StyleSheet.create({
     marginBottom: 48,
   },
   logo: {
-    fontSize: 48,
-    fontWeight: '900' as const,
-    color: CREAM,
-    letterSpacing: 2,
+    width: 200,
+    height: 80,
+    marginBottom: 8,
   },
   tagline: {
     fontSize: 16,
@@ -536,7 +542,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   forgotPasswordText: {
-    color: TEAL,
+    color: ACCENT,
     fontSize: 14,
     fontWeight: '600' as const,
   },
@@ -566,7 +572,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   signupLink: {
-    color: TEAL,
+    color: ACCENT,
     fontSize: 14,
     fontWeight: '700' as const,
   },
@@ -603,14 +609,14 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
   },
   demoButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: ACCENT,
     height: 56,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
     borderWidth: 2,
-    borderColor: '#059669',
+    borderColor: '#3A6D73',
   },
   demoButtonText: {
     color: 'white',
@@ -618,14 +624,14 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
   },
   techDemoButton: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: GOLD,
     height: 56,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 2,
-    borderColor: '#D97706',
+    borderColor: '#8B7660',
   },
   techDemoButtonText: {
     color: 'white',

@@ -15,7 +15,7 @@ import { UserRequestsProvider } from "@/hooks/user-requests-store";
 import { ActivityIndicator, View, StyleSheet } from "react-native";
 import { trpc, trpcReactClient } from "@/lib/trpc";
 
-const TEAL = '#14B8A6';
+const TEAL = '#0D3135';
 const CREAM = '#FFF8E7';
 
 const queryClient = new QueryClient();

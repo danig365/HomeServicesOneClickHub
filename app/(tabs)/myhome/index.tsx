@@ -311,12 +311,12 @@ export default function MyHomeScreen() {
               {subscription.currentScore.improvements.length > 0 && (
                 <View style={styles.scoreDetailSection}>
                   <View style={styles.scoreDetailHeader}>
-                    <Icons.TrendingUp size={18} color={COLORS.accent.success} />
+                    <Icons.TrendingUp size={18} color={COLORS.accentColors.success} />
                     <Text style={styles.scoreDetailTitle}>Recent Improvements</Text>
                   </View>
                   {subscription.currentScore.improvements.map((improvement, idx) => (
                     <View key={idx} style={styles.scoreDetailItem}>
-                      <Icons.CheckCircle size={14} color={COLORS.accent.success} />
+                      <Icons.CheckCircle size={14} color={COLORS.accentColors.success} />
                       <Text style={styles.scoreDetailText}>{improvement}</Text>
                     </View>
                   ))}
@@ -427,7 +427,7 @@ export default function MyHomeScreen() {
             <View style={styles.nextVisitCard}>
               <View style={styles.nextVisitHeader}>
                 <View style={styles.nextVisitDate}>
-                  <Icons.Calendar size={20} color="#D4AF37" />
+                  <Icons.Calendar size={20} color={COLORS.gold} />
                   <Text style={styles.nextVisitDateText}>{formatDate(nextVisit.scheduledDate)}</Text>
                 </View>
                 <View style={styles.nextVisitBadge}>
@@ -485,7 +485,7 @@ export default function MyHomeScreen() {
                     style={styles.rescheduleButton}
                     onPress={() => handleReschedule(service)}
                   >
-                    <Icons.Calendar size={16} color="#D4AF37" />
+                    <Icons.Calendar size={16} color={COLORS.gold} />
                     <Text style={styles.rescheduleButtonText}>Reschedule</Text>
                   </TouchableOpacity>
                 </View>
@@ -540,7 +540,7 @@ export default function MyHomeScreen() {
             {getOverdueReminders(property.id).slice(0, 2).map((reminder: PropertyReminder) => (
               <View key={reminder.id} style={[styles.reminderPreviewCard, styles.reminderOverdue]}>
                 <View style={styles.reminderPreviewHeader}>
-                  <Icons.AlertCircle size={18} color={COLORS.accent.error} />
+                  <Icons.AlertCircle size={18} color={COLORS.accentColors.error} />
                   <Text style={styles.reminderPreviewTitle}>{reminder.title}</Text>
                 </View>
                 <Text style={styles.reminderPreviewDate}>
@@ -588,7 +588,7 @@ export default function MyHomeScreen() {
                   onPress={() => handlePropertyChange(prop.id)}
                 >
                   <View style={styles.propertyOptionLeft}>
-                    <Icons.Home size={24} color={prop.id === property.id ? '#D4AF37' : '#6B7280'} />
+                    <Icons.Home size={24} color={prop.id === property.id ? COLORS.gold : '#6B7280'} />
                     <View>
                       <Text style={[
                         styles.propertyOptionName,
@@ -602,7 +602,7 @@ export default function MyHomeScreen() {
                     </View>
                   </View>
                   {prop.id === property.id && (
-                    <Icons.Check size={24} color="#D4AF37" />
+                    <Icons.Check size={24} color={COLORS.gold} />
                   )}
                 </TouchableOpacity>
               ))}
@@ -690,7 +690,7 @@ export default function MyHomeScreen() {
                   );
                 }}
               >
-                <Icons.Phone size={20} color="#D4AF37" />
+                <Icons.Phone size={20} color={COLORS.gold} />
                 <Text style={styles.contactButtonText}>Contact Hudson for Custom Date</Text>
               </TouchableOpacity>
             </View>
@@ -1256,10 +1256,10 @@ const styles = StyleSheet.create({
   insightBadgeText: {
     fontSize: 11,
     fontWeight: '600' as const,
-    color: COLORS.accent.success,
+    color: COLORS.accentColors.success,
   },
   insightBadgeTextOverdue: {
-    color: COLORS.accent.error,
+    color: COLORS.accentColors.error,
   },
   customBadge: {
     backgroundColor: 'rgba(212, 175, 55, 0.1)',
@@ -1338,7 +1338,7 @@ const styles = StyleSheet.create({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     gap: 8,
-    backgroundColor: COLORS.accent.error,
+    backgroundColor: COLORS.accentColors.error,
     padding: 16,
     borderRadius: 12,
   },
@@ -1576,7 +1576,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.background.secondary,
   },
   reminderOverdue: {
-    borderColor: COLORS.accent.error,
+    borderColor: COLORS.accentColors.error,
     borderWidth: 2,
     backgroundColor: 'rgba(239, 68, 68, 0.05)',
   },
