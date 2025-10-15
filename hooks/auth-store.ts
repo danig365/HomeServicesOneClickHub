@@ -2,7 +2,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useState, useCallback, useMemo } from 'react';
 import { User, UserRole } from '@/types/user';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseAdmin } from '@/lib/supabase';
 import { Session, AuthError } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
@@ -351,16 +351,45 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     console.log('[Auth] Current user:', user?.id, user?.email);
 
     try {
-      console.log('[Auth] Attempting to delete user via Supabase admin API...');
-      const { error } = await supabase.auth.admin.deleteUser(userId);
+      // First check if user exists in profiles
+      const { data: existingUser, error: checkError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-      if (error) {
-        console.error('[Auth] Supabase deleteUser error:', error);
-        console.error('[Auth] Error details:', JSON.stringify(error, null, 2));
+      if (checkError) {
+        console.error('[Auth] Error checking user existence:', checkError);
         return false;
       }
 
-      console.log('[Auth] User deleted successfully from auth');
+      if (!existingUser) {
+        console.error('[Auth] User not found:', userId);
+        return false;
+      }
+
+      // Delete user using admin client
+      const { error: authDeleteError } = await supabaseAdmin
+        .auth
+        .admin
+        .deleteUser(userId);
+
+      if (authDeleteError) {
+        console.error('[Auth] Supabase deleteUser error:', authDeleteError);
+        console.error('[Auth] Error details:', JSON.stringify(authDeleteError, null, 2));
+        return false;
+      }
+
+      // After successful auth deletion, delete from profiles
+      const { error: profileDeleteError } = await supabaseAdmin
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+
+      if (profileDeleteError) {
+        console.error('[Auth] Error deleting user profile:', profileDeleteError);
+        return false;
+      }
 
       // If the deleted user is the current logged-in user
       if (user?.id === userId) {
@@ -378,42 +407,67 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   }, [user, logout]);
 
   const updateUserRole = useCallback(async (userId: string, newRole: UserRole): Promise<boolean> => {
-    console.log('[Auth] updateUserRole called:', { userId, newRole });
+    console.log('[Auth] updateUserRole called:', { newRole, userId });
     console.log('[Auth] Current user:', user?.id, user?.email, user?.role);
 
     try {
-      console.log('[Auth] Attempting to update role in profiles table...');
-      const { data, error } = await supabase
+      // First verify user exists
+      const { data: existingUser, error: checkError } = await supabaseAdmin
         .from('profiles')
-        .update({ role: newRole })
+        .select('*')
         .eq('id', userId)
-        .select()
         .single();
 
-      if (error) {
-        console.error('[Auth] Supabase updateUserRole error:', error);
-        console.error('[Auth] Error details:', JSON.stringify(error, null, 2));
+      if (checkError) {
+        console.error('[Auth] Error checking user:', checkError);
         return false;
       }
 
-      console.log('[Auth] Role updated successfully:', data);
-
-      if (data && user?.id === userId) {
-        console.log('[Auth] Updated user is current user, updating local state...');
-        setUser(data);
-        await AsyncStorage.setItem(AUTH_USER_KEY, JSON.stringify(data));
-        console.log('[Auth] Local state updated');
+      if (!existingUser) {
+        console.error('[Auth] User not found in database:', userId);
+        return false;
       }
 
-      console.log('[Auth] updateUserRole completed successfully');
+      console.log('[Auth] Found user:', existingUser.email, 'Current role:', existingUser.role);
+
+      // Perform update
+      const { error: updateError } = await supabaseAdmin
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', userId);
+
+      if (updateError) {
+        console.error('[Auth] Update error:', updateError);
+        return false;
+      }
+
+      // Verify the update
+      const { data: updatedUser, error: verifyError } = await supabaseAdmin
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (verifyError || !updatedUser) {
+        console.error('[Auth] Verification error:', verifyError);
+        return false;
+      }
+
+      console.log('[Auth] Role successfully updated from', existingUser.role, 'to', updatedUser.role);
+
+      // Update local state if it's the current user
+      if (user?.id === userId) {
+        setUser(prev => prev ? { ...prev, role: newRole } : null);
+        setProfile(prev => prev ? { ...prev, role: newRole } : null);
+        console.log('[Auth] Local state updated for current user');
+      }
+
       return true;
     } catch (err) {
       console.error('[Auth] Update user role error:', err);
-      console.error('[Auth] Error stack:', err instanceof Error ? err.stack : 'No stack trace');
       return false;
     }
   }, [user]);
-
 
   const clearError = useCallback(() => {
     setError(null);

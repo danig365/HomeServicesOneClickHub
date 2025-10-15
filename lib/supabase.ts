@@ -1,46 +1,23 @@
-// import 'react-native-url-polyfill/auto'
-// import { createClient } from '@supabase/supabase-js'
-// import * as SecureStore from 'expo-secure-store'
-// import { Platform } from 'react-native'
-
-// // Replace with your Supabase project credentials
-// const supabaseUrl = 'https://kesrywbeoglrvqrwpweh.supabase.co' // e.g., 'https://xxxxx.supabase.co'
-// const supabaseAnonKey = 'sb_publishable_5Hxa_QIyj64IvrBeXMgJug__iDgDbaM'
-
-// // Custom storage adapter for Expo SecureStore
-// const ExpoSecureStoreAdapter = {
-//   getItem: (key: string) => {
-//     return SecureStore.getItemAsync(key)
-//   },
-//   setItem: (key: string, value: string) => {
-//     SecureStore.setItemAsync(key, value)
-//   },
-//   removeItem: (key: string) => {
-//     SecureStore.deleteItemAsync(key)
-//   },
-// }
-
-// export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-//   auth: {
-//     storage: Platform.OS === 'web' ? undefined : ExpoSecureStoreAdapter,
-//     autoRefreshToken: true,
-//     persistSession: true,
-//     detectSessionInUrl: false,
-//   },
-// })
-
-
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-// const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = 'https://kesrywbeoglrvqrwpweh.supabase.co';
+const supabaseAnonKey = 'sb_publishable_5Hxa_QIyj64IvrBeXMgJug__iDgDbaM';
+const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtlc3J5d2Jlb2dscnZxcndwd2VoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDAxOTI1MCwiZXhwIjoyMDc1NTk1MjUwfQ.792VbSlqVAzNdoK62FvXxjw9v4hRc8zkYpm_59jxB4Q'; // Add your service role key here
 
-const supabaseUrl = 'https://kesrywbeoglrvqrwpweh.supabase.co' // e.g., 'https://xxxxx.supabase.co'
-const supabaseAnonKey = 'sb_publishable_5Hxa_QIyj64IvrBeXMgJug__iDgDbaM'
-
+// Regular client for normal operations
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+});
+
+// Admin client for privileged operations
+export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,
