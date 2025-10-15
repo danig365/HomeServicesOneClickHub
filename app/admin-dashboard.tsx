@@ -23,7 +23,8 @@ interface UserWithCreatedAt extends User {
 }
 
 export default function AdminDashboard() {
-  const { user, getAllUsers, deleteUser, updateUserRole } = useAuth();
+  
+const { user, getAllUsers, updateUserRole, deleteUser } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
@@ -31,7 +32,6 @@ export default function AdminDashboard() {
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [allUsers, setAllUsers] = useState<UserWithCreatedAt[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
-
   useEffect(() => {
     if (user?.role !== 'admin') {
       router.replace('/(tabs)/(home)');
@@ -161,7 +161,6 @@ export default function AdminDashboard() {
         </View>
         <Text style={styles.headerSubtitle}>Manage all users and permissions</Text>
       </View>
-
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
           <Text style={styles.statValue}>{stats.total}</Text>
@@ -505,4 +504,21 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 16,
   },
+  headerRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 8,
+},
+logoutButton: {
+  paddingHorizontal: 16,
+  paddingVertical: 8,
+  backgroundColor: '#FEE2E2',
+  borderRadius: 8,
+},
+logoutButtonText: {
+  fontSize: 14,
+  fontWeight: '600' as const,
+  color: '#DC2626',
+},
 });

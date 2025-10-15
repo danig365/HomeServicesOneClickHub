@@ -2,7 +2,6 @@ import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useState, useCallback, useMemo } from 'react';
 import { User, UserRole } from '@/types/user';
-import { trpcClient } from '@/lib/trpc';
 import { supabase } from '@/lib/supabase';
 import { Session, AuthError } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
@@ -203,92 +202,92 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   }, []);
 
   const signup = useCallback(async (data: SignupData): Promise<boolean> => {
-  setError(null);
-  setIsLoading(true);
+    setError(null);
+    setIsLoading(true);
 
-  try {
-    console.log('[Auth] Attempting Supabase signup for:', data.email);
+    try {
+      console.log('[Auth] Attempting Supabase signup for:', data.email);
 
-    // ✅ Create redirect URL dynamically
-    const redirectTo =
-      Constants?.expoConfig?.extra?.supabaseRedirectUrl ||
-      Linking.createURL('/auth/callback'); // fallback for safety
+      // ✅ Create redirect URL dynamically
+      const redirectTo =
+        Constants?.expoConfig?.extra?.supabaseRedirectUrl ||
+        Linking.createURL('/auth/callback'); // fallback for safety
 
-    console.log('[Auth] Using redirect URL:', redirectTo);
+      console.log('[Auth] Using redirect URL:', redirectTo);
 
-    // ✅ Include `emailRedirectTo` in Supabase signup
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: {
-        emailRedirectTo: redirectTo, // <-- Key addition
-        data: {
-          full_name: data.name,
-          role: data.role || 'homeowner',
+      // ✅ Include `emailRedirectTo` in Supabase signup
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          emailRedirectTo: redirectTo, // <-- Key addition
+          data: {
+            full_name: data.name,
+            role: data.role || 'homeowner',
+          },
         },
-      },
-    });
+      });
 
-    if (signUpError) throw signUpError;
+      if (signUpError) throw signUpError;
 
-    console.log('[Auth] Signup successful');
+      console.log('[Auth] Signup successful');
 
-    // Check if email confirmation is required
-    if (authData.user && !authData.session) {
-      setError('Please check your email to confirm your account');
+      // Check if email confirmation is required
+      if (authData.user && !authData.session) {
+        setError('Please check your email to confirm your account');
+        setIsLoading(false);
+        return false;
+      }
+
+      // If session exists, set it
+      if (authData.session && authData.user) {
+        setSession(authData.session);
+        setToken(authData.session.access_token);
+
+        // Fetch profile
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authData.user.id)
+          .single();
+
+        if (profileData) {
+          setProfile(profileData);
+          setUser({
+            id: profileData.id,
+            email: profileData.email,
+            name: profileData.full_name || '',
+            phone: data.phone,
+            role: profileData.role,
+          });
+        }
+      }
+
+      setIsLoading(false);
+      return true;
+    } catch (err) {
+      console.error('[Auth] Signup error:', err);
+      let errorMessage = 'An error occurred during signup';
+
+      if (err instanceof AuthError) {
+        if (err.message.includes('User already registered')) {
+          errorMessage = 'This email is already registered. Please login instead.';
+        } else {
+          errorMessage = err.message;
+        }
+      } else if (err instanceof Error) {
+        if (err.message.includes('Network request failed') || err.message.includes('fetch failed')) {
+          errorMessage = 'Unable to connect to server. Please check your internet connection.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+
+      setError(errorMessage);
       setIsLoading(false);
       return false;
     }
-
-    // If session exists, set it
-    if (authData.session && authData.user) {
-      setSession(authData.session);
-      setToken(authData.session.access_token);
-
-      // Fetch profile
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authData.user.id)
-        .single();
-
-      if (profileData) {
-        setProfile(profileData);
-        setUser({
-          id: profileData.id,
-          email: profileData.email,
-          name: profileData.full_name || '',
-          phone: data.phone,
-          role: profileData.role,
-        });
-      }
-    }
-
-    setIsLoading(false);
-    return true;
-  } catch (err) {
-    console.error('[Auth] Signup error:', err);
-    let errorMessage = 'An error occurred during signup';
-
-    if (err instanceof AuthError) {
-      if (err.message.includes('User already registered')) {
-        errorMessage = 'This email is already registered. Please login instead.';
-      } else {
-        errorMessage = err.message;
-      }
-    } else if (err instanceof Error) {
-      if (err.message.includes('Network request failed') || err.message.includes('fetch failed')) {
-        errorMessage = 'Unable to connect to server. Please check your internet connection.';
-      } else {
-        errorMessage = err.message;
-      }
-    }
-
-    setError(errorMessage);
-    setIsLoading(false);
-    return false;
-  }
-}, []);
+  }, []);
 
 
   const logout = useCallback(async () => {
@@ -330,72 +329,91 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   }, []);
 
   const getAllUsers = useCallback(async () => {
-    if (!token) return [];
     try {
-      const users = await trpcClient.users.getAll.query(undefined, {
-        context: {
-          headers: {
-            authorization: `Bearer ${token}`,
-          },
-        },
-      });
-      return users;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*');
+
+      if (error) {
+        console.error('Supabase getAllUsers error:', error);
+        return [];
+      }
+
+      return data || [];
     } catch (err) {
       console.error('Get all users error:', err);
       return [];
     }
-  }, [token]);
+  }, []);
 
   const deleteUser = useCallback(async (userId: string): Promise<boolean> => {
-    if (!token) return false;
-    try {
-      const result = await trpcClient.users.delete.mutate(
-        { userId },
-        {
-          context: {
-            headers: {
-              authorization: `Bearer ${token}`,
-            },
-          },
-        }
-      );
+    console.log('[Auth] deleteUser called with userId:', userId);
+    console.log('[Auth] Current user:', user?.id, user?.email);
 
-      if (result.success && user?.id === userId) {
+    try {
+      console.log('[Auth] Attempting to delete user via Supabase admin API...');
+      const { error } = await supabase.auth.admin.deleteUser(userId);
+
+      if (error) {
+        console.error('[Auth] Supabase deleteUser error:', error);
+        console.error('[Auth] Error details:', JSON.stringify(error, null, 2));
+        return false;
+      }
+
+      console.log('[Auth] User deleted successfully from auth');
+
+      // If the deleted user is the current logged-in user
+      if (user?.id === userId) {
+        console.log('[Auth] Deleted user was current user, logging out...');
         await logout();
       }
 
-      return result.success;
+      console.log('[Auth] deleteUser completed successfully');
+      return true;
     } catch (err) {
-      console.error('Delete user error:', err);
+      console.error('[Auth] Delete user error:', err);
+      console.error('[Auth] Error stack:', err instanceof Error ? err.stack : 'No stack trace');
       return false;
     }
-  }, [token, user, logout]);
+  }, [user, logout]);
 
   const updateUserRole = useCallback(async (userId: string, newRole: UserRole): Promise<boolean> => {
-    if (!token) return false;
-    try {
-      const result = await trpcClient.users.updateRole.mutate(
-        { userId, newRole },
-        {
-          context: {
-            headers: {
-              authorization: `Bearer ${token}`,
-            },
-          },
-        }
-      );
+    console.log('[Auth] updateUserRole called:', { userId, newRole });
+    console.log('[Auth] Current user:', user?.id, user?.email, user?.role);
 
-      if (result.success && result.user && user?.id === userId) {
-        setUser(result.user);
-        await AsyncStorage.setItem(AUTH_USER_KEY, JSON.stringify(result.user));
+    try {
+      console.log('[Auth] Attempting to update role in profiles table...');
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[Auth] Supabase updateUserRole error:', error);
+        console.error('[Auth] Error details:', JSON.stringify(error, null, 2));
+        return false;
       }
 
-      return result.success;
+      console.log('[Auth] Role updated successfully:', data);
+
+      if (data && user?.id === userId) {
+        console.log('[Auth] Updated user is current user, updating local state...');
+        setUser(data);
+        await AsyncStorage.setItem(AUTH_USER_KEY, JSON.stringify(data));
+        console.log('[Auth] Local state updated');
+      }
+
+      console.log('[Auth] updateUserRole completed successfully');
+      return true;
     } catch (err) {
-      console.error('Update user role error:', err);
+      console.error('[Auth] Update user role error:', err);
+      console.error('[Auth] Error stack:', err instanceof Error ? err.stack : 'No stack trace');
       return false;
     }
-  }, [token, user]);
+  }, [user]);
+
 
   const clearError = useCallback(() => {
     setError(null);

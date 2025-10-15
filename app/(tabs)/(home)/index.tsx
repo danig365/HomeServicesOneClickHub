@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Alert, Image, SafeAreaView, Linking, Platform } from 'react-native';
-import { services, categories } from '@/constants/services';
+import { useServices } from '@/hooks/services-store';
 import ServiceCard from '@/components/ServiceCard';
 import * as Icons from 'lucide-react-native';
 import { useCart } from '@/hooks/cart-store';
@@ -9,6 +9,7 @@ import { useSubscription } from '@/hooks/subscription-store';
 import { useProperties } from '@/hooks/properties-store';
 import { useUser } from '@/hooks/user-store';
 import { Service } from '@/types/service';
+import { categories } from '@/constants/services';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppointments } from '@/hooks/appointments-store';
 import { COLORS } from '@/constants/colors';
@@ -19,6 +20,7 @@ export default function HomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortBy, setSortBy] = useState<'popular' | 'price-low' | 'price-high'>('popular');
   const { addToCart } = useCart();
+const { services, isLoading: servicesLoading, getPopularServices } = useServices();
   const { getSelectedProperty } = useProperties();
   const { getSubscription, getNextVisit } = useSubscription();
   const property = getSelectedProperty();

@@ -157,6 +157,28 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     return newSubscription;
   }, [subscriptions, saveSubscriptions]);
 
+  const cancelSubscription = useCallback(async (propertyId: string) => {
+  const subscription = subscriptions[propertyId];
+  if (!subscription) return;
+  
+  const updated = {
+    ...subscriptions,
+    [propertyId]: {
+      ...subscription,
+      status: 'cancelled' as const,
+    }
+  };
+  
+  await saveSubscriptions(updated);
+  
+  // Also update in Supabase
+  await supabase
+    .from('subscriptions')
+    .update({ status: 'cancelled' })
+    .eq('property_id', propertyId);
+    
+}, [subscriptions, saveSubscriptions]);
+
   // Define these helper functions first before updateBlueprint
   const addHistoryEntry = useCallback((blueprint: MyHomeBlueprint, entry: Omit<BlueprintHistoryEntry, 'id' | 'timestamp'>) => {
     if (!blueprint) return blueprint;
@@ -699,6 +721,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     isLoading,
     getSubscription,
     createSubscription,
+    cancelSubscription,  // ✅ ADD THIS
     updateBlueprint,
     updateScore,
     addVisit,
@@ -725,6 +748,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     isLoading,
     getSubscription,
     createSubscription,
+     cancelSubscription,  // ✅ ADD THIS
     updateBlueprint,
     updateScore,
     addVisit,

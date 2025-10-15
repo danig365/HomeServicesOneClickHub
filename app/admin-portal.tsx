@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+
 import {
   View,
   Text,
@@ -9,6 +10,7 @@ import {
   Alert,
   Modal,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { useAuth } from '@/hooks/auth-store';
 import { useRouter } from 'expo-router';
@@ -37,20 +39,19 @@ import { useProperties } from '@/hooks/properties-store';
 import { useSubscription } from '@/hooks/subscription-store';
 import { useUserRequests } from '@/hooks/user-requests-store';
 import { UserRequest, RequestStatus } from '@/types/user-request';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '@/lib/supabase';
 
 const TEAL = '#14B8A6';
 const CREAM = '#FFF8E7';
 
+
 type TabType = 'services' | 'users' | 'subscriptions' | 'techs' | 'requests' | 'blueprints';
 
-const SERVICES_STORAGE_KEY = 'hudson_services';
-
 export default function AdminPortal() {
-  const { user, getAllUsers, updateUserRole, deleteUser } = useAuth();
+ const { user, getAllUsers, updateUserRole, deleteUser } = useAuth();
   const { properties } = useProperties();
   const { subscriptions, createSubscription, cancelSubscription } = useSubscription();
-  const { requests, getRequestStats, updateRequestStatus, assignTech, deleteRequest } = useUserRequests();
+  const { requests, updateRequestStatus, assignTech, deleteRequest } = useUserRequests();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<TabType>('requests');
@@ -58,6 +59,9 @@ export default function AdminPortal() {
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [isLoadingServices, setIsLoadingServices] = useState(false);
+  const [blueprints, setBlueprints] = useState<any[]>([]);
+  const [isLoadingBlueprints, setIsLoadingBlueprints] = useState(false);
 
   React.useEffect(() => {
     if (user?.role !== 'admin') {
@@ -65,41 +69,131 @@ export default function AdminPortal() {
     }
   }, [user, router]);
 
+  // Load services from Supabase
   const loadServices = useCallback(async () => {
+    setIsLoadingServices(true);
     try {
-      const stored = await AsyncStorage.getItem(SERVICES_STORAGE_KEY);
-      if (stored) {
-        setServices(JSON.parse(stored));
-      }
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setServices(data || []);
     } catch (error) {
       console.error('Failed to load services:', error);
+      Alert.alert('Error', 'Failed to load services');
+    } finally {
+      setIsLoadingServices(false);
     }
   }, []);
 
-  const loadUsers = useCallback(async () => {
+   const loadUsers = useCallback(async () => {
     const users = await getAllUsers();
     setAllUsers(users);
   }, [getAllUsers]);
+// Load blueprints from Supabase
+  const loadBlueprints = useCallback(async () => {
+    setIsLoadingBlueprints(true);
+    try {
+      const { data, error } = await supabase
+        .from('blueprints')
+        .select(`
+          *,
+          properties (
+            id,
+            name,
+            address
+          ),
+          five_year_plans (
+            *,
+            yearly_plan_items (*)
+          ),
+          custom_projects (*)
+        `)
+        .order('updated_at', { ascending: false });
 
+      if (error) throw error;
+      setBlueprints(data || []);
+    } catch (error) {
+      console.error('Failed to load blueprints:', error);
+      Alert.alert('Error', 'Failed to load blueprints');
+    } finally {
+      setIsLoadingBlueprints(false);
+    }
+  }, []);
   React.useEffect(() => {
     loadServices();
     loadUsers();
-  }, [loadServices, loadUsers]);
-
-  const saveServices = async (newServices: Service[]) => {
+    loadBlueprints();
+  }, [loadServices, loadUsers, loadBlueprints]);
+// Create service in Supabase
+  const createService = async (service: Omit<Service, 'id'>) => {
     try {
-      await AsyncStorage.setItem(SERVICES_STORAGE_KEY, JSON.stringify(newServices));
-      setServices(newServices);
+      const { error } = await supabase
+        .from('services')
+        .insert([service])
+        .select()
+        .single();
+
+      if (error) throw error;
+      await loadServices();
+      return true;
     } catch (error) {
-      console.error('Failed to save services:', error);
+      console.error('Failed to create service:', error);
+      Alert.alert('Error', 'Failed to create service');
+      return false;
     }
   };
+   // Update service in Supabase
+  const updateService = async (serviceId: string, updates: Partial<Service>) => {
+    try {
+      const { error } = await supabase
+        .from('services')
+        .update(updates)
+        .eq('id', serviceId);
+
+      if (error) throw error;
+      await loadServices();
+      return true;
+    } catch (error) {
+      console.error('Failed to update service:', error);
+      Alert.alert('Error', 'Failed to update service');
+      return false;
+    }
+  };
+   // Delete service from Supabase
+  const deleteService = async (serviceId: string) => {
+    try {
+      const { error } = await supabase
+        .from('services')
+        .delete()
+        .eq('id', serviceId);
+
+      if (error) throw error;
+      await loadServices();
+      return true;
+    } catch (error) {
+      console.error('Failed to delete service:', error);
+      Alert.alert('Error', 'Failed to delete service');
+      return false;
+    }
+  };
+  // const saveServices = async (newServices: Service[]) => {
+  //   try {
+  //     await AsyncStorage.setItem(SERVICES_STORAGE_KEY, JSON.stringify(newServices));
+  //     setServices(newServices);
+  //   } catch (error) {
+  //     console.error('Failed to save services:', error);
+  //   }
+  // };
+
 
   if (user?.role !== 'admin') {
     return null;
   }
 
-  const tabs = [
+ const tabs = [
     { id: 'requests' as const, label: 'User Requests', icon: ClipboardList },
     { id: 'blueprints' as const, label: 'Blueprints', icon: FileText },
     { id: 'services' as const, label: 'Services', icon: Store },
@@ -174,17 +268,19 @@ export default function AdminPortal() {
 
         {activeTab === 'blueprints' && (
           <BlueprintsTab
-            properties={properties}
-            subscriptions={subscriptions}
+            blueprints={blueprints}
+            isLoading={isLoadingBlueprints}
             onViewBlueprint={(propertyId) => {
               router.push('/blueprint');
             }}
+            onRefresh={loadBlueprints}
           />
         )}
 
         {activeTab === 'services' && (
           <ServicesTab
             services={services}
+            isLoading={isLoadingServices}
             onAddService={() => {
               setEditingService(null);
               setShowServiceModal(true);
@@ -203,8 +299,7 @@ export default function AdminPortal() {
                     text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
-                      const updated = services.filter((s) => s.id !== serviceId);
-                      await saveServices(updated);
+                      await deleteService(serviceId);
                     },
                   },
                 ]
@@ -223,7 +318,8 @@ export default function AdminPortal() {
                 Alert.alert('Success', 'User role updated');
                 loadUsers();
               } else {
-                Alert.alert('Error', 'Failed to update user role');
+                console.log(userId, newRole);
+                Alert.alert('Error', `Failed to update user role+ ${userId}+ ${newRole}`);
               }
             }}
             onDeleteUser={async (userId, userName) => {
@@ -280,7 +376,11 @@ export default function AdminPortal() {
         )}
 
         {activeTab === 'techs' && (
-          <TechAssignmentsTab users={allUsers.filter((u) => u.role === 'tech')} properties={properties} />
+          <TechAssignmentsTab 
+            users={allUsers.filter((u) => u.role === 'tech')} 
+            properties={properties}
+            onRefresh={loadUsers}
+          />
         )}
       </ScrollView>
 
@@ -293,28 +393,36 @@ export default function AdminPortal() {
         }}
         onSave={async (service) => {
           if (editingService) {
-            const updated = services.map((s) => (s.id === service.id ? service : s));
-            await saveServices(updated);
+            const success = await updateService(service.id, service);
+            if (success) {
+              Alert.alert('Success', 'Service updated');
+            }
           } else {
-            const newService = { ...service, id: Date.now().toString() };
-            await saveServices([...services, newService]);
+            const { id, ...serviceData } = service;
+            const success = await createService(serviceData);
+            if (success) {
+              Alert.alert('Success', 'Service created');
+            }
           }
           setShowServiceModal(false);
           setEditingService(null);
-          Alert.alert('Success', 'Service saved');
         }}
       />
     </View>
   );
+
 }
 
+// Updated ServicesTab with loading state
 function ServicesTab({
   services,
+  isLoading,
   onAddService,
   onEditService,
   onDeleteService,
 }: {
   services: Service[];
+  isLoading: boolean;
   onAddService: () => void;
   onEditService: (service: Service) => void;
   onDeleteService: (serviceId: string) => void;
@@ -329,7 +437,12 @@ function ServicesTab({
         </TouchableOpacity>
       </View>
 
-      {services.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color={TEAL} />
+          <Text style={styles.emptyStateText}>Loading services...</Text>
+        </View>
+      ) : services.length === 0 ? (
         <View style={styles.emptyState}>
           <Package size={48} color="#D1D5DB" />
           <Text style={styles.emptyStateText}>No services yet</Text>
@@ -369,6 +482,7 @@ function ServicesTab({
     </View>
   );
 }
+
 
 function UsersTab({
   users,
@@ -525,11 +639,24 @@ function SubscriptionsTab({
     </View>
   );
 }
-
-function TechAssignmentsTab({ users, properties }: { users: User[]; properties: any[] }) {
+// Updated TechAssignmentsTab
+function TechAssignmentsTab({ 
+  users, 
+  properties,
+  onRefresh 
+}: { 
+  users: User[]; 
+  properties: any[];
+  onRefresh: () => void;
+}) {
   return (
     <View style={styles.tabContent}>
-      <Text style={styles.sectionTitle}>Tech Assignments</Text>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Tech Assignments</Text>
+        <TouchableOpacity style={styles.addButton} onPress={onRefresh}>
+          <Text style={styles.addButtonText}>Refresh</Text>
+        </TouchableOpacity>
+      </View>
 
       {users.map((tech) => (
         <View key={tech.id} style={styles.techCard}>
@@ -561,6 +688,7 @@ function TechAssignmentsTab({ users, properties }: { users: User[]; properties: 
   );
 }
 
+
 function ServiceModal({
   visible,
   service,
@@ -579,11 +707,11 @@ function ServiceModal({
     frequency: 'one-time',
     description: '',
     icon: 'Package',
-    estimatedDuration: '1-2 hours',
+    estimated_duration: '1-2 hours',
     included: [],
     image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800',
     popular: false,
-    requiresLicense: false,
+    requires_license: false,
   });
 
   React.useEffect(() => {
@@ -597,11 +725,11 @@ function ServiceModal({
         frequency: 'one-time',
         description: '',
         icon: 'Package',
-        estimatedDuration: '1-2 hours',
+        estimated_duration: '1-2 hours',
         included: [],
         image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800',
         popular: false,
-        requiresLicense: false,
+        requires_license: false,
       });
     }
   }, [service, visible]);
@@ -714,8 +842,8 @@ function ServiceModal({
             <Text style={styles.inputLabel}>Estimated Duration</Text>
             <TextInput
               style={styles.input}
-              value={formData.estimatedDuration}
-              onChangeText={(text) => setFormData({ ...formData, estimatedDuration: text })}
+              value={formData.estimated_duration}
+              onChangeText={(text) => setFormData({ ...formData, estimated_duration: text })}
               placeholder="e.g., 1-2 hours"
               placeholderTextColor="#9CA3AF"
             />
@@ -733,8 +861,8 @@ function ServiceModal({
             <View style={styles.switchRow}>
               <Text style={styles.inputLabel}>Requires License</Text>
               <Switch
-                value={formData.requiresLicense}
-                onValueChange={(value) => setFormData({ ...formData, requiresLicense: value })}
+                value={formData.requires_license}
+                onValueChange={(value) => setFormData({ ...formData, requires_license: value })}
                 trackColor={{ false: '#D1D5DB', true: TEAL }}
                 thumbColor={CREAM}
               />
@@ -908,43 +1036,54 @@ function UserRequestsTab({
   );
 }
 
+// KEEP THIS VERSION:
 function BlueprintsTab({
-  properties,
-  subscriptions,
+  blueprints,
+  isLoading,
   onViewBlueprint,
+  onRefresh,
 }: {
-  properties: any[];
-  subscriptions: Record<string, any>;
+  blueprints: any[];
+  isLoading: boolean;
   onViewBlueprint: (propertyId: string) => void;
+  onRefresh: () => void;
 }) {
-  const propertiesWithBlueprints = properties.filter(p => subscriptions[p.id]?.blueprint);
-
   return (
     <View style={styles.tabContent}>
-      <Text style={styles.sectionTitle}>Property Blueprints</Text>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Property Blueprints</Text>
+        <TouchableOpacity style={styles.addButton} onPress={onRefresh}>
+          <Text style={styles.addButtonText}>Refresh</Text>
+        </TouchableOpacity>
+      </View>
 
-      {propertiesWithBlueprints.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color={TEAL} />
+          <Text style={styles.emptyStateText}>Loading blueprints...</Text>
+        </View>
+      ) : blueprints.length === 0 ? (
         <View style={styles.emptyState}>
           <FileText size={48} color="#D1D5DB" />
           <Text style={styles.emptyStateText}>No blueprints yet</Text>
         </View>
       ) : (
-        propertiesWithBlueprints.map((property) => {
-          const subscription = subscriptions[property.id];
-          const blueprint = subscription?.blueprint;
-          const planItems = blueprint?.fiveYearPlan?.items || [];
-          const customProjects = blueprint?.customProjects || [];
+        blueprints.map((blueprint) => {
+          const property = blueprint.properties;
+          const fiveYearPlan = blueprint.five_year_plans?.[0];
+          const planItems = fiveYearPlan?.yearly_plan_items || [];
+          const customProjects = blueprint.custom_projects || [];
 
           return (
-            <View key={property.id} style={styles.blueprintCard}>
+            <View key={blueprint.id} style={styles.blueprintCard}>
               <View style={styles.blueprintHeader}>
                 <View>
-                  <Text style={styles.propertyName}>{property.name}</Text>
-                  <Text style={styles.propertyAddress}>{property.address}</Text>
+                  <Text style={styles.propertyName}>{property?.name || 'Unknown Property'}</Text>
+                  <Text style={styles.propertyAddress}>{property?.address || ''}</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.viewButton}
-                  onPress={() => onViewBlueprint(property.id)}
+                  onPress={() => onViewBlueprint(blueprint.property_id)}
                 >
                   <FileText size={16} color={TEAL} />
                   <Text style={styles.viewButtonText}>View</Text>
@@ -968,9 +1107,9 @@ function BlueprintsTab({
                 </View>
               </View>
 
-              {blueprint?.updatedAt && (
+              {blueprint.updated_at && (
                 <Text style={styles.blueprintUpdated}>
-                  Updated: {new Date(blueprint.updatedAt).toLocaleDateString()}
+                  Updated: {new Date(blueprint.updated_at).toLocaleDateString()}
                 </Text>
               )}
             </View>

@@ -7,8 +7,8 @@ export interface Service {
   description: string;
   icon: string;
   popular?: boolean;
-  requiresLicense?: boolean;
-  estimatedDuration: string;
+  requires_license?: boolean;
+  estimated_duration: string;
   included: string[];
   image: string;
 }

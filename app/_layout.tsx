@@ -12,12 +12,14 @@ import { TechAppointmentsProvider } from "@/hooks/tech-appointments-store";
 import { SnapshotProvider } from "@/hooks/snapshot-store";
 import { AuthProvider, useAuth } from "@/hooks/auth-store";
 import { UserRequestsProvider } from "@/hooks/user-requests-store";
-import { ActivityIndicator, View, StyleSheet } from "react-native";
+import { ActivityIndicator, View, StyleSheet,TouchableOpacity, Alert } from "react-native";
 import { trpc, trpcReactClient } from "@/lib/trpc";
-import { AppointmentsProvider } from '@/hooks/appointments-store';
+import { AppointmentsProvider } from "@/hooks/appointments-store";
+import { ServicesProvider } from "@/hooks/services-store";
+import { TechAssignmentsProvider } from "@/hooks/tech-assignments-store";
+import { LogOut } from "lucide-react-native";
 const TEAL = "#0D3135";
 const CREAM = "#FFF8E7";
-
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
@@ -25,9 +27,9 @@ function RootLayoutNav() {
   const router = useRouter();
   const segments = useSegments();
   const { initialize } = useAuth();
-useEffect(() => {
-  initialize();
-}, [initialize]);
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
   useEffect(() => {
     if (isLoading) return;
 
@@ -173,11 +175,12 @@ useEffect(() => {
         }}
       />
       <Stack.Screen
-        name="admin-portal"
-        options={{
-          title: "Admin Portal",
-        }}
-      />
+  name="admin-portal"
+  options={{
+    title: "Admin Portal",
+    headerRight: () => <AdminHeaderRight />,
+  }}
+/>
     </Stack>
   );
 }
@@ -190,7 +193,31 @@ const styles = StyleSheet.create({
     backgroundColor: CREAM,
   },
 });
+function AdminHeaderRight() {
+  const { logout } = useAuth();
+  const router = useRouter();
 
+  return (
+    <TouchableOpacity
+      onPress={() => {
+        Alert.alert("Logout", "Are you sure you want to logout?", [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Logout",
+            style: "destructive",
+            onPress: async () => {
+              await logout();
+              router.replace("/login");
+            },
+          },
+        ]);
+      }}
+      style={{ marginRight: 16 }}
+    >
+      <LogOut size={22} color="#EF4444" />
+    </TouchableOpacity>
+  );
+}
 export default function RootLayout() {
   return (
     <trpc.Provider client={trpcReactClient} queryClient={queryClient}>
@@ -200,21 +227,27 @@ export default function RootLayout() {
             <UserProvider>
               <PropertiesProvider>
                 <SubscriptionProvider>
-                  <UserRequestsProvider>
-                    <TechAppointmentsProvider>
-                      <SnapshotProvider>
-                        <CartProvider>
-                          <BookingsProvider>
-                             <AppointmentsProvider>
-                            <VaultProvider>
-                              <RootLayoutNav />
-                            </VaultProvider>
-                            </AppointmentsProvider>
-                          </BookingsProvider>
-                        </CartProvider>
-                      </SnapshotProvider>
-                    </TechAppointmentsProvider>
-                  </UserRequestsProvider>
+                  <ServicesProvider>
+                    {/* ✅ ADD THIS */}
+                    <TechAssignmentsProvider>
+                      <UserRequestsProvider>
+                        <TechAppointmentsProvider>
+                          <SnapshotProvider>
+                            <CartProvider>
+                              <BookingsProvider>
+                                <AppointmentsProvider>
+                                  <VaultProvider>
+                                    <RootLayoutNav />
+                                  </VaultProvider>
+                                </AppointmentsProvider>
+                              </BookingsProvider>
+                            </CartProvider>
+                          </SnapshotProvider>
+                        </TechAppointmentsProvider>
+                      </UserRequestsProvider>
+                    </TechAssignmentsProvider>
+                  </ServicesProvider>{" "}
+                  {/* ✅ ADD THIS */}
                 </SubscriptionProvider>
               </PropertiesProvider>
             </UserProvider>

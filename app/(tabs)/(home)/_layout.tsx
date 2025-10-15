@@ -1,8 +1,7 @@
-import { Stack } from "expo-router";
+import { Stack,router } from "expo-router";
 import React from "react";
 import { TouchableOpacity, View } from "react-native";
 import { ShoppingCart } from "lucide-react-native";
-import { router } from "expo-router";
 import { useCart } from "@/hooks/cart-store";
 import CartBadge from "@/components/CartBadge";
 import { COLORS } from "@/constants/colors";

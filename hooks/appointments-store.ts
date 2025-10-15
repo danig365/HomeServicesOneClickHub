@@ -1,10 +1,10 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { 
-  Appointment, 
-  AppointmentDB, 
-  MaintenanceTaskDB, 
+import {
+  Appointment,
+  AppointmentDB,
+  MaintenanceTaskDB,
   toAppointment
 } from '@/types/appointment';
 
@@ -58,7 +58,7 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
       }
 
       console.log('Found properties:', properties?.length || 0);
-      
+
       if (!properties || properties.length === 0) {
         console.log('No properties found for user');
         setAppointments([]);
@@ -103,7 +103,7 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
       const appointmentsWithDetails: Appointment[] = visitsData.map(visit => {
         const property = properties.find(p => p.id === visit.property_id);
         const visitTasks = tasksData?.filter(t => t.visit_id === visit.id) || [];
-        
+
         return toAppointment(
           visit as AppointmentDB,
           visitTasks as MaintenanceTaskDB[],
@@ -114,7 +114,7 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
 
       console.log('Processed appointments:', appointmentsWithDetails.length); // ADDED: Debug log
       console.log('Appointments details:', JSON.stringify(appointmentsWithDetails, null, 2)); // ADDED: Debug log
-      
+
       setAppointments(appointmentsWithDetails);
     } catch (error) {
       console.error('Failed to load appointments:', error);
@@ -173,7 +173,7 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
         .eq('id', taskId);
 
       if (error) throw error;
-      
+
       await loadAppointments();
     } catch (error) {
       console.error('Failed to complete task:', error);
@@ -192,7 +192,7 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
         .eq('id', appointmentId);
 
       if (error) throw error;
-      
+
       await loadAppointments();
     } catch (error) {
       console.error('Failed to update notes:', error);
@@ -206,13 +206,13 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
     console.log('getUpcomingAppointments called');
     console.log('Current time:', now.toISOString());
     console.log('Total appointments:', appointments.length);
-    
+
     const upcoming = appointments
       .filter(apt => {
         const aptDate = new Date(apt.scheduledDate);
         const isScheduled = apt.status === 'scheduled';
         const isFuture = aptDate >= now;
-        
+
         console.log(`Appointment ${apt.id}:`, {
           scheduledDate: apt.scheduledDate,
           status: apt.status,
@@ -220,13 +220,13 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
           isFuture,
           passes: isScheduled && isFuture
         });
-        
+
         return isScheduled && isFuture;
       })
-      .sort((a, b) => 
+      .sort((a, b) =>
         new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()
       );
-    
+
     console.log('Filtered upcoming appointments:', upcoming.length);
     return upcoming;
   }, [appointments]);
@@ -235,12 +235,12 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
   const getPastAppointments = useCallback(() => {
     const now = new Date();
     return appointments
-      .filter(apt => 
-        apt.status === 'completed' || 
+      .filter(apt =>
+        apt.status === 'completed' ||
         apt.status === 'cancelled' ||
         (apt.status === 'scheduled' && new Date(apt.scheduledDate) < now)
       )
-      .sort((a, b) => 
+      .sort((a, b) =>
         new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime()
       );
   }, [appointments]);
@@ -249,7 +249,7 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
   const getAppointmentsByProperty = useCallback((propertyId: string) => {
     return appointments
       .filter(apt => apt.propertyId === propertyId)
-      .sort((a, b) => 
+      .sort((a, b) =>
         new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime()
       );
   }, [appointments]);
