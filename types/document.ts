@@ -3,20 +3,26 @@ export interface Document {
   title: string;
   category: DocumentCategory;
   type: string;
-  dateAdded: string;
-  dateModified: string;
-  size?: string;
   description?: string;
   tags: string[];
-  imageUrl?: string;
-  fileUrl?: string;
-  isImportant: boolean;
-  reminderDate?: string;
-  expirationDate?: string;
-  propertyId?: string;
+  image_url?: string;
+  file_url?: string;
+  image_storage_path?: string;  // Add this
+  file_storage_path?: string;   // Add this
+  file_name?: string;
+  file_type?: string;
+  file_size?: number;
+  is_important: boolean;
+  reminder_date?: string;
+  expiration_date?: string;
+  property_id?: string;
+  user_id: string;
+  size?: string;
+  created_at: string;
+  updated_at: string;
 }
 
-export type DocumentCategory = 
+export type DocumentCategory =
   | 'Property Records'
   | 'Insurance'
   | 'Warranties'

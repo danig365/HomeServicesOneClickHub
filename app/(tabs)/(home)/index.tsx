@@ -10,7 +10,7 @@ import { useProperties } from '@/hooks/properties-store';
 import { useUser } from '@/hooks/user-store';
 import { Service } from '@/types/service';
 import { LinearGradient } from 'expo-linear-gradient';
-
+import { useAppointments } from '@/hooks/appointments-store';
 import { COLORS } from '@/constants/colors';
 
 export default function HomeScreen() {
@@ -25,6 +25,17 @@ export default function HomeScreen() {
   const subscription = property ? getSubscription(property.id) : null;
   const nextVisit = property && subscription ? getNextVisit(property.id) : null;
   const { currentUser } = useUser();
+
+  const { getUpcomingAppointments, isLoading: appointmentsLoading } = useAppointments();
+  const upcomingAppointments = getUpcomingAppointments().slice(0, 3);
+  
+  console.log('DEBUG - appointmentsLoading:', appointmentsLoading);
+  console.log('DEBUG - upcomingAppointments count:', upcomingAppointments.length);
+  console.log('DEBUG - upcomingAppointments data:', JSON.stringify(upcomingAppointments, null, 2));
+
+  const getIconComponent = (iconName: string): React.ComponentType<any> => {
+    return (Icons as any)[iconName] || Icons.Info;
+  };
 
   const getPropertyInsights = () => {
     if (!property || !property.insights) return [];
@@ -47,7 +58,6 @@ export default function HomeScreen() {
       );
     }
     
-    // Sort services
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'popular':
@@ -69,8 +79,6 @@ export default function HomeScreen() {
   const popularServices = useMemo(() => 
     services.filter(s => s.popular).slice(0, 3), []
   );
-
-
 
   const handleQuickAdd = (service: Service) => {
     addToCart(service);
@@ -101,9 +109,7 @@ export default function HomeScreen() {
             Alert.alert(
               'Call Hudson',
               'Your Personal Home Director\n\n1-800-HUDSON\n(1-800-483-7661)',
-              [
-                { text: 'OK', style: 'default' }
-              ]
+              [{ text: 'OK', style: 'default' }]
             );
           }
         })
@@ -111,15 +117,11 @@ export default function HomeScreen() {
           Alert.alert(
             'Call Hudson',
             'Your Personal Home Director\n\n1-800-HUDSON\n(1-800-483-7661)',
-            [
-              { text: 'OK', style: 'default' }
-            ]
+            [{ text: 'OK', style: 'default' }]
           );
         });
     }
   };
-
-
 
   const renderCallButton = () => (
     <TouchableOpacity 
@@ -204,8 +206,6 @@ export default function HomeScreen() {
     );
   };
 
-
-
   const getSeasonalInsights = () => {
     const month = new Date().getMonth();
     
@@ -258,7 +258,7 @@ export default function HomeScreen() {
 
   const renderSeasonalInsights = () => {
     const seasonal = getSeasonalInsights();
-    const SeasonIcon = Icons[seasonal.icon as keyof typeof Icons] as React.ComponentType<any>;
+    const SeasonIcon = getIconComponent(seasonal.icon);
     
     return (
       <View style={styles.seasonalSection}>
@@ -271,7 +271,7 @@ export default function HomeScreen() {
         </View>
         <View style={styles.insightsContainer}>
           {seasonal.insights.map((insight, index) => {
-            const InsightIcon = Icons[insight.icon as keyof typeof Icons] as React.ComponentType<any>;
+            const InsightIcon = getIconComponent(insight.icon);
             return (
               <View key={index} style={styles.seasonalInsightCard}>
                 <View style={[styles.insightIconContainer, { backgroundColor: `${seasonal.color}15` }]}>
@@ -330,7 +330,7 @@ export default function HomeScreen() {
           { key: 'price-low', label: 'Price: Low to High', icon: 'ArrowUp' },
           { key: 'price-high', label: 'Price: High to Low', icon: 'ArrowDown' }
         ].map((sort) => {
-          const IconComponent = Icons[sort.icon as keyof typeof Icons] as React.ComponentType<any> || Icons.Filter;
+          const IconComponent = getIconComponent(sort.icon);
           return (
             <TouchableOpacity
               key={sort.key}
@@ -353,8 +353,6 @@ export default function HomeScreen() {
       </ScrollView>
     </View>
   );
-
-
 
   const renderHeroSection = () => (
     <View style={styles.heroSection}>
@@ -423,7 +421,7 @@ export default function HomeScreen() {
         </View>
         <View style={styles.insightsGrid}>
           {displayInsights.map((insight, index) => {
-            const IconComponent = Icons[getInsightIcon(insight.category) as keyof typeof Icons] as React.ComponentType<any>;
+            const IconComponent = getIconComponent(getInsightIcon(insight.category));
             const color = getInsightColor(insight.category);
             return (
               <View key={index} style={styles.insightCard}>
@@ -444,15 +442,101 @@ export default function HomeScreen() {
     );
   };
 
+  const renderUpcomingAppointments = () => {
+    console.log('DEBUG renderUpcomingAppointments - appointmentsLoading:', appointmentsLoading);
+    console.log('DEBUG renderUpcomingAppointments - length:', upcomingAppointments.length);
+    console.log('DEBUG renderUpcomingAppointments - will render:', !(appointmentsLoading || upcomingAppointments.length === 0));
+    
+    if (appointmentsLoading || upcomingAppointments.length === 0) return null;
+
+    return (
+      <View style={styles.appointmentsSection}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionHeaderLeft}>
+            <Icons.Calendar size={24} color={COLORS.teal} />
+            <Text style={styles.sectionTitle}>Upcoming Appointments</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.seeAllButton}
+            onPress={() => router.push('/appointments-list' as any)}
+          >
+            <Text style={styles.seeAllText}>See All</Text>
+            <Icons.ChevronRight size={16} color={COLORS.teal} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.appointmentsList}>
+          {upcomingAppointments.map((apt) => {
+            const appointmentDate = new Date(apt.scheduledDate);
+            const today = new Date();
+            const isToday = appointmentDate.toDateString() === today.toDateString();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const isTomorrow = appointmentDate.toDateString() === tomorrow.toDateString();
+
+            let dateLabel = appointmentDate.toLocaleDateString('en-US', { 
+              month: 'short', 
+              day: 'numeric' 
+            });
+            if (isToday) dateLabel = 'Today';
+            if (isTomorrow) dateLabel = 'Tomorrow';
+
+            return (
+              <TouchableOpacity
+                key={apt.id}
+                style={styles.appointmentCard}
+                onPress={() => router.push(`/appointment/${apt.id}` as any)}
+              >
+                <View style={[
+                  styles.appointmentIconContainer,
+                  { backgroundColor: apt.type === 'snapshot-inspection' ? '#FEF3C7' : '#E0F2FE' }
+                ]}>
+                  {apt.type === 'snapshot-inspection' ? (
+                    <Icons.Camera size={20} color="#B45309" />
+                  ) : (
+                    <Icons.Wrench size={20} color="#0369A1" />
+                  )}
+                </View>
+                
+                <View style={styles.appointmentInfo}>
+                  <Text style={styles.appointmentProperty} numberOfLines={1}>
+                    {apt.propertyName}
+                  </Text>
+                  <Text style={styles.appointmentType}>
+                    {apt.type === 'snapshot-inspection' ? 'Snapshot Inspection' : 'Monthly Maintenance'}
+                  </Text>
+                  <View style={styles.appointmentMeta}>
+                    <View style={styles.appointmentMetaItem}>
+                      <Icons.Calendar size={12} color="#6B7280" />
+                      <Text style={styles.appointmentMetaText}>{dateLabel}</Text>
+                    </View>
+                    <View style={styles.appointmentMetaItem}>
+                      <Icons.User size={12} color="#6B7280" />
+                      <Text style={styles.appointmentMetaText}>{apt.techName}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.appointmentArrow}>
+                  <Icons.ChevronRight size={20} color="#9CA3AF" />
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         {renderHeroSection()}
       </SafeAreaView>
-      
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         {renderSubscriptionBanner()}
         {renderKeyInsights()}
+        {renderUpcomingAppointments()}
 
         <View style={styles.searchContainer}>
           <Icons.Search size={20} color="#6B7280" style={styles.searchIcon} />
@@ -468,14 +552,14 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView 
-          horizontal 
+        <ScrollView
+          horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.servicesCategoriesContainer}
           contentContainerStyle={styles.servicesCategoriesContent}
         >
           {categories.map((category) => {
-            const IconComponent = Icons[category.icon as keyof typeof Icons] as React.ComponentType<any> || Icons.Grid3x3;
+            const IconComponent = getIconComponent(category.icon);
             return (
               <TouchableOpacity
                 key={category.name}
@@ -485,9 +569,9 @@ export default function HomeScreen() {
                 ]}
                 onPress={() => setSelectedCategory(category.name)}
               >
-                <IconComponent 
-                  size={16} 
-                  color={selectedCategory === category.name ? 'white' : '#6B7280'} 
+                <IconComponent
+                  size={16}
+                  color={selectedCategory === category.name ? 'white' : '#6B7280'}
                 />
                 <Text style={[
                   styles.serviceCategoryText,
@@ -512,7 +596,7 @@ export default function HomeScreen() {
           {renderSortFilter()}
 
           <View style={styles.servicesGrid}>
-            {filteredServices.map((service, index) => (
+            {filteredServices.map((service) => (
               <View key={service.id} style={styles.cardContainer}>
                 <ServiceCard service={service} onQuickAdd={() => handleQuickAdd(service)} />
               </View>
@@ -562,7 +646,8 @@ const styles = StyleSheet.create({
   },
   insightsSection: {
     marginHorizontal: 20,
-    marginBottom: 28,
+    marginTop: 16,
+    marginBottom: 20,
   },
   insightsSectionHeader: {
     flexDirection: 'row',
@@ -637,8 +722,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.cream,
   },
-
-
   seasonalSection: {
     marginHorizontal: 20,
     marginBottom: 24,
@@ -707,6 +790,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 16,
     gap: 10,
+    justifyContent: 'space-between',
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
   },
   sectionTitle: {
     fontSize: 18,
@@ -767,6 +857,7 @@ const styles = StyleSheet.create({
   },
   servicesSection: {
     marginTop: 8,
+    paddingBottom: 24,
   },
   sortContainer: {
     paddingHorizontal: 20,
@@ -818,7 +909,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 20,
-    gap: 14,
+    justifyContent: 'space-between',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -850,14 +941,12 @@ const styles = StyleSheet.create({
     padding: 8,
     marginLeft: 8,
   },
-
   servicesCategoriesContainer: {
     maxHeight: 50,
     marginBottom: 16,
   },
   servicesCategoriesContent: {
     paddingHorizontal: 20,
-    gap: 10,
   },
   serviceCategoryChip: {
     flexDirection: 'row',
@@ -882,13 +971,6 @@ const styles = StyleSheet.create({
   },
   serviceCategoryTextActive: {
     color: 'white',
-  },
-  listContent: {
-    padding: 16,
-    paddingTop: 8,
-  },
-  row: {
-    justifyContent: 'space-between',
   },
   cardContainer: {
     width: '48%',
@@ -944,10 +1026,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   subscriptionBanner: {
     marginHorizontal: 20,
-    marginBottom: 16,
+    marginTop: 16,
+    marginBottom: 20,
     borderRadius: 16,
     overflow: 'hidden',
     shadowColor: '#000',
@@ -1057,5 +1139,77 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: 'white',
+  },
+  appointmentsSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: 'transparent',
+    marginBottom: 16,
+  },
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  seeAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.teal,
+  },
+  appointmentsList: {
+    gap: 12,
+  },
+  appointmentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 14,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.04)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  appointmentIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appointmentInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  appointmentProperty: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  appointmentType: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  appointmentMeta: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 4,
+  },
+  appointmentMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  appointmentMetaText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  appointmentArrow: {
+    padding: 4,
   },
 });

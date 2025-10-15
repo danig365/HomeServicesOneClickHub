@@ -1,8 +1,21 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Subscription, HudsonVisit, MyHomeBlueprint, MyHomeScore, CustomProject, MonthlyVisitRequest, SnapshotInspection, RoomInspection, FiveYearPlan, BlueprintHistoryEntry, BlueprintNotification, YearlyPlanItem } from '@/types/subscription';
+import { supabase } from '@/lib/supabase';
+import { 
+  Subscription, 
+  HudsonVisit, 
+  MyHomeBlueprint, 
+  MyHomeScore,
+  SnapshotInspection, 
+  RoomInspection, 
+  FiveYearPlan, 
+  BlueprintHistoryEntry, 
+  BlueprintNotification, 
+  YearlyPlanItem 
+} from '@/types/subscription';
 import { getMonthlyTasks } from '@/constants/maintenance-tasks';
+// import { useBlueprint } from './blueprint-store';
 
 const STORAGE_KEY = 'hudson_subscriptions';
 
@@ -70,6 +83,8 @@ const generateMockScore = (propertyId: string): MyHomeScore => {
 };
 
 export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
+  // const { loadBlueprint, createBlueprint } = useBlueprint();
+  
   const [subscriptions, setSubscriptions] = useState<Record<string, Subscription>>({});
   const [isLoading, setIsLoading] = useState(true);
 
@@ -130,212 +145,76 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         photo: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
       },
     };
+
+    // Update blueprint's subscription_id
+    await supabase
+      .from('blueprints')
+      .update({ subscription_id: newSubscription.id })
+      .eq('property_id', propertyId);
     
     const updated = { ...subscriptions, [propertyId]: newSubscription };
     await saveSubscriptions(updated);
     return newSubscription;
   }, [subscriptions, saveSubscriptions]);
 
-  const addHistoryEntry = useCallback((blueprint: MyHomeBlueprint, entry: Omit<BlueprintHistoryEntry, 'id' | 'timestamp'>): MyHomeBlueprint => {
-    const historyEntry: BlueprintHistoryEntry = {
-      ...entry,
-      id: `history-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-    };
-    
+  // Define these helper functions first before updateBlueprint
+  const addHistoryEntry = useCallback((blueprint: MyHomeBlueprint, entry: Omit<BlueprintHistoryEntry, 'id' | 'timestamp'>) => {
+    if (!blueprint) return blueprint;
     return {
       ...blueprint,
-      history: [...(blueprint.history || []), historyEntry],
+      history: [...(blueprint.history || []), {
+        ...entry,
+        id: `hist-${Date.now()}`,
+        timestamp: new Date().toISOString()
+      }]
     };
   }, []);
 
-  const addNotification = useCallback((blueprint: MyHomeBlueprint, notification: Omit<BlueprintNotification, 'id' | 'timestamp' | 'read'>): MyHomeBlueprint => {
-    const newNotification: BlueprintNotification = {
-      ...notification,
-      id: `notif-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      read: false,
-    };
-    
+  const addNotification = useCallback((blueprint: MyHomeBlueprint, notification: Omit<BlueprintNotification, 'id' | 'created_at' | 'read'>) => {
+    if (!blueprint) return blueprint;
     return {
       ...blueprint,
-      notifications: [...(blueprint.notifications || []), newNotification],
+      notifications: [...(blueprint.notifications || []), {
+        ...notification,
+        id: `notif-${Date.now()}`,
+        created_at: new Date().toISOString(),
+        read: false
+      }]
     };
   }, []);
 
-  const updateBlueprint = useCallback(async (propertyId: string, blueprint: MyHomeBlueprint, historyEntry?: Omit<BlueprintHistoryEntry, 'id' | 'timestamp'>, notification?: Omit<BlueprintNotification, 'id' | 'timestamp' | 'read'>) => {
-    console.log('[SubscriptionStore] Updating blueprint for property:', propertyId);
-    console.log('[SubscriptionStore] Current subscriptions:', Object.keys(subscriptions));
-    
+  const updateBlueprint = useCallback(async (
+    propertyId: string, 
+    updates: Partial<MyHomeBlueprint>,
+    historyEntry?: Omit<BlueprintHistoryEntry, 'id' | 'timestamp'>,
+    notification?: Omit<BlueprintNotification, 'id' | 'created_at' | 'read'>
+  ) => {
     const subscription = subscriptions[propertyId];
-    if (!subscription) {
-      console.error('[SubscriptionStore] No subscription found for property:', propertyId);
-      return;
-    }
-    
-    console.log('[SubscriptionStore] Found subscription, updating blueprint');
-    
-    let updatedBlueprint = blueprint;
-    
+    if (!subscription?.blueprint) return;
+
+    let updatedBlueprint = {
+      ...subscription.blueprint,
+      ...updates,
+    };
+
     if (historyEntry) {
       updatedBlueprint = addHistoryEntry(updatedBlueprint, historyEntry);
     }
-    
+
     if (notification) {
       updatedBlueprint = addNotification(updatedBlueprint, notification);
     }
-    
+
     const updated = {
       ...subscriptions,
       [propertyId]: {
         ...subscription,
-        blueprint: updatedBlueprint,
-      },
+        blueprint: updatedBlueprint
+      }
     };
-    
-    console.log('[SubscriptionStore] Saving updated subscriptions');
+
     await saveSubscriptions(updated);
-    console.log('[SubscriptionStore] Blueprint saved successfully');
   }, [subscriptions, saveSubscriptions, addHistoryEntry, addNotification]);
-
-  const addCustomProject = useCallback(async (propertyId: string, project: CustomProject, userId: string, userName: string, userRole: 'tech' | 'homeowner' | 'admin') => {
-    const subscription = subscriptions[propertyId];
-    if (!subscription?.blueprint) return;
-    
-    const updatedBlueprint = {
-      ...subscription.blueprint,
-      customProjects: [...(subscription.blueprint.customProjects || []), project],
-      updatedAt: new Date().toISOString(),
-    };
-    
-    const historyEntry: Omit<BlueprintHistoryEntry, 'id' | 'timestamp'> = {
-      action: 'project_added',
-      description: `${userName} added project: ${project.title}`,
-      userId,
-      userName,
-      userRole,
-      relatedItemId: project.id,
-      relatedItemType: 'project',
-    };
-    
-    const notification: Omit<BlueprintNotification, 'id' | 'timestamp' | 'read'> = {
-      blueprintId: subscription.blueprint.id,
-      propertyId,
-      type: 'project_added',
-      message: `${userName} added a new project: ${project.title}`,
-      userId,
-      userName,
-      userRole,
-      recipientRole: userRole === 'tech' ? 'homeowner' : 'tech',
-    };
-    
-    await updateBlueprint(propertyId, updatedBlueprint, historyEntry, notification);
-  }, [subscriptions, updateBlueprint]);
-
-  const removeCustomProject = useCallback(async (propertyId: string, projectId: string, userId: string, userName: string, userRole: 'tech' | 'homeowner' | 'admin') => {
-    const subscription = subscriptions[propertyId];
-    if (!subscription?.blueprint) return;
-    
-    const project = subscription.blueprint.customProjects?.find(p => p.id === projectId);
-    
-    const updatedBlueprint = {
-      ...subscription.blueprint,
-      customProjects: (subscription.blueprint.customProjects || []).filter(p => p.id !== projectId),
-      updatedAt: new Date().toISOString(),
-    };
-    
-    const historyEntry: Omit<BlueprintHistoryEntry, 'id' | 'timestamp'> = {
-      action: 'project_updated',
-      description: `${userName} removed project: ${project?.title || 'Unknown'}`,
-      userId,
-      userName,
-      userRole,
-      relatedItemId: projectId,
-      relatedItemType: 'project',
-    };
-    
-    await updateBlueprint(propertyId, updatedBlueprint, historyEntry);
-  }, [subscriptions, updateBlueprint]);
-
-  const updateCustomProject = useCallback(async (propertyId: string, projectId: string, updates: Partial<CustomProject>, userId: string, userName: string, userRole: 'tech' | 'homeowner' | 'admin') => {
-    const subscription = subscriptions[propertyId];
-    if (!subscription?.blueprint) return;
-    
-    const oldProject = subscription.blueprint.customProjects?.find(p => p.id === projectId);
-    if (!oldProject) return;
-    
-    const updatedBlueprint = {
-      ...subscription.blueprint,
-      customProjects: (subscription.blueprint.customProjects || []).map(p =>
-        p.id === projectId ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p
-      ),
-      updatedAt: new Date().toISOString(),
-    };
-    
-    const action = updates.status === 'completed' ? 'project_completed' : 'project_updated';
-    const description = updates.status === 'completed' 
-      ? `${userName} completed project: ${oldProject.title}`
-      : `${userName} updated project: ${oldProject.title}`;
-    
-    const historyEntry: Omit<BlueprintHistoryEntry, 'id' | 'timestamp'> = {
-      action,
-      description,
-      userId,
-      userName,
-      userRole,
-      relatedItemId: projectId,
-      relatedItemType: 'project',
-      changes: Object.keys(updates).map(key => ({
-        field: key,
-        oldValue: (oldProject as any)[key],
-        newValue: (updates as any)[key],
-      })),
-    };
-    
-    const notification: Omit<BlueprintNotification, 'id' | 'timestamp' | 'read'> = {
-      blueprintId: subscription.blueprint.id,
-      propertyId,
-      type: updates.status === 'completed' ? 'project_completed' : (userRole === 'tech' ? 'tech_update' : 'user_update'),
-      message: description,
-      userId,
-      userName,
-      userRole,
-      recipientRole: userRole === 'tech' ? 'homeowner' : 'tech',
-    };
-    
-    await updateBlueprint(propertyId, updatedBlueprint, historyEntry, notification);
-  }, [subscriptions, updateBlueprint]);
-
-  const addMonthlyVisitRequest = useCallback(async (propertyId: string, request: MonthlyVisitRequest) => {
-    const subscription = subscriptions[propertyId];
-    if (!subscription?.blueprint) return;
-    
-    const currentRequests = subscription.blueprint.monthlyVisitRequests || [];
-    if (currentRequests.length >= 5) {
-      throw new Error('Maximum 5 monthly visit requests allowed');
-    }
-    
-    const updatedBlueprint = {
-      ...subscription.blueprint,
-      monthlyVisitRequests: [...currentRequests, request],
-      updatedAt: new Date().toISOString(),
-    };
-    
-    await updateBlueprint(propertyId, updatedBlueprint);
-  }, [subscriptions, updateBlueprint]);
-
-  const removeMonthlyVisitRequest = useCallback(async (propertyId: string, requestId: string) => {
-    const subscription = subscriptions[propertyId];
-    if (!subscription?.blueprint) return;
-    
-    const updatedBlueprint = {
-      ...subscription.blueprint,
-      monthlyVisitRequests: (subscription.blueprint.monthlyVisitRequests || []).filter(r => r.id !== requestId),
-      updatedAt: new Date().toISOString(),
-    };
-    
-    await updateBlueprint(propertyId, updatedBlueprint);
-  }, [subscriptions, updateBlueprint]);
 
   const updateScore = useCallback(async (propertyId: string, score: MyHomeScore) => {
     const subscription = subscriptions[propertyId];
@@ -345,23 +224,28 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       ...subscriptions,
       [propertyId]: {
         ...subscription,
-        currentScore: score,
-      },
+        currentScore: score
+      }
     };
     
     await saveSubscriptions(updated);
   }, [subscriptions, saveSubscriptions]);
 
-  const addVisit = useCallback(async (propertyId: string, visit: HudsonVisit) => {
+  const addVisit = useCallback(async (propertyId: string, visit: Omit<HudsonVisit, 'id'>) => {
     const subscription = subscriptions[propertyId];
     if (!subscription) return;
+    
+    const newVisit: HudsonVisit = {
+      ...visit,
+      id: `visit-${Date.now()}`
+    };
     
     const updated = {
       ...subscriptions,
       [propertyId]: {
         ...subscription,
-        visits: [...subscription.visits, visit],
-      },
+        visits: [...subscription.visits, newVisit]
+      }
     };
     
     await saveSubscriptions(updated);
@@ -370,11 +254,11 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
   const updateVisit = useCallback(async (propertyId: string, visitId: string, updates: Partial<HudsonVisit>) => {
     const subscription = subscriptions[propertyId];
     if (!subscription) return;
-    
+
     const updatedVisits = subscription.visits.map(v =>
       v.id === visitId ? { ...v, ...updates } : v
     );
-    
+
     const updated = {
       ...subscriptions,
       [propertyId]: {
@@ -382,26 +266,24 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         visits: updatedVisits,
       },
     };
-    
+
     await saveSubscriptions(updated);
   }, [subscriptions, saveSubscriptions]);
 
   const completeTask = useCallback(async (propertyId: string, visitId: string, taskId: string) => {
     const subscription = subscriptions[propertyId];
     if (!subscription) return;
-    
-    const updatedVisits = subscription.visits.map(visit => {
-      if (visit.id === visitId) {
-        return {
-          ...visit,
-          tasks: visit.tasks.map(task =>
-            task.id === taskId ? { ...task, completed: true } : task
-          ),
-        };
+
+    const updatedVisits = subscription.visits.map(v => {
+      if (v.id === visitId) {
+        const updatedTasks = v.tasks.map(t =>
+          t.id === taskId ? { ...t, completed: true } : t
+        );
+        return { ...v, tasks: updatedTasks };
       }
-      return visit;
+      return v;
     });
-    
+
     const updated = {
       ...subscriptions,
       [propertyId]: {
@@ -409,42 +291,24 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
         visits: updatedVisits,
       },
     };
-    
+
     await saveSubscriptions(updated);
   }, [subscriptions, saveSubscriptions]);
 
   const getNextVisit = useCallback((propertyId: string): HudsonVisit | null => {
     const subscription = subscriptions[propertyId];
     if (!subscription) return null;
-    
-    const upcoming = subscription.visits.find(v => v.status === 'scheduled');
-    return upcoming || null;
+    return subscription.visits.find(v => v.status === 'scheduled') || null;
   }, [subscriptions]);
 
-  const getRecentVisits = useCallback((propertyId: string, count: number = 3): HudsonVisit[] => {
+  const getRecentVisits = useCallback((propertyId: string, limit: number = 3): HudsonVisit[] => {
     const subscription = subscriptions[propertyId];
     if (!subscription) return [];
-    
     return subscription.visits
       .filter(v => v.status === 'completed')
       .sort((a, b) => new Date(b.completedDate!).getTime() - new Date(a.completedDate!).getTime())
-      .slice(0, count);
+      .slice(0, limit);
   }, [subscriptions]);
-
-  const cancelSubscription = useCallback(async (propertyId: string) => {
-    const subscription = subscriptions[propertyId];
-    if (!subscription) return;
-    
-    const updated = {
-      ...subscriptions,
-      [propertyId]: {
-        ...subscription,
-        status: 'cancelled' as const,
-      },
-    };
-    
-    await saveSubscriptions(updated);
-  }, [subscriptions, saveSubscriptions]);
 
   const createSnapshotInspection = useCallback(async (propertyId: string, techId: string, techName: string, scheduledDate: string) => {
     const subscription = subscriptions[propertyId];
@@ -580,21 +444,27 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     } : undefined;
     
     const notification = userId && userName && userRole ? {
-      blueprintId: subscription.blueprint.id,
-      propertyId,
-      type: 'plan_modified' as const,
+      blueprint_id: subscription.blueprint.id,
+      property_id: propertyId,
+      type: 'plan_modified' as const,  // Add type assertion here
       message: `${userName} modified the 5-year maintenance plan`,
-      userId,
-      userName,
-      userRole,
-      recipientRole: (userRole === 'tech' ? 'homeowner' : 'tech') as 'tech' | 'homeowner' | 'admin',
+      user_id: userId,
+      user_name: userName,
+      user_role: userRole,
+      recipient_role: (userRole === 'tech' ? 'homeowner' : 'tech') as 'tech' | 'homeowner' | 'admin'
     } : undefined;
     
     await updateBlueprint(propertyId, updatedBlueprint, historyEntry, notification);
     console.log('[SubscriptionStore] Five-year plan saved successfully');
   }, [subscriptions, updateBlueprint]);
 
-  const addPlanItem = useCallback(async (propertyId: string, item: Omit<YearlyPlanItem, 'id' | 'createdAt'>, userId: string, userName: string, userRole: 'tech' | 'homeowner' | 'admin') => {
+  const addPlanItem = useCallback(async (
+    propertyId: string,
+    item: YearlyPlanItem,
+    userId: string,
+    userName: string,
+    userRole: 'tech' | 'homeowner' | 'admin'
+  ) => {
     const subscription = subscriptions[propertyId];
     if (!subscription?.blueprint) return;
     
@@ -644,15 +514,15 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       relatedItemType: 'plan_item',
     };
     
-    const notification: Omit<BlueprintNotification, 'id' | 'timestamp' | 'read'> = {
-      blueprintId: subscription.blueprint.id,
-      propertyId,
+    const notification: Omit<BlueprintNotification, 'id' | 'created_at' | 'read'> = {
+      blueprint_id: subscription.blueprint.id,
+      property_id: propertyId,
       type: 'plan_modified',
       message: `${userName} added a new item to the 5-year plan: ${item.title}`,
-      userId,
-      userName,
-      userRole,
-      recipientRole: userRole === 'tech' ? 'homeowner' : 'tech',
+      user_id: userId,
+      user_name: userName,
+      user_role: userRole,
+      recipient_role: (userRole === 'tech' ? 'homeowner' : 'tech') as 'tech' | 'homeowner' | 'admin'
     };
     
     await updateBlueprint(propertyId, updatedBlueprint, historyEntry, notification);
@@ -699,15 +569,15 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       })),
     };
     
-    const notification: Omit<BlueprintNotification, 'id' | 'timestamp' | 'read'> = {
-      blueprintId: subscription.blueprint.id,
-      propertyId,
+    const notification: Omit<BlueprintNotification, 'id' | 'created_at' | 'read'> = {
+      blueprint_id: subscription.blueprint.id,
+      property_id: propertyId,
       type: 'plan_modified',
       message: description,
-      userId,
-      userName,
-      userRole,
-      recipientRole: userRole === 'tech' ? 'homeowner' : 'tech',
+      user_id: userId,
+      user_name: userName,
+      user_role: userRole,
+      recipient_role: (userRole === 'tech' ? 'homeowner' : 'tech') as 'tech' | 'homeowner' | 'admin'
     };
     
     await updateBlueprint(propertyId, updatedBlueprint, historyEntry, notification);
@@ -742,15 +612,15 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
       relatedItemType: 'plan_item',
     };
     
-    const notification: Omit<BlueprintNotification, 'id' | 'timestamp' | 'read'> = {
-      blueprintId: subscription.blueprint.id,
-      propertyId,
+    const notification: Omit<BlueprintNotification, 'id' | 'created_at' | 'read'> = {
+      blueprint_id: subscription.blueprint.id,
+      property_id: propertyId,
       type: 'plan_modified',
       message: `${userName} removed an item from the 5-year plan: ${item.title}`,
-      userId,
-      userName,
-      userRole,
-      recipientRole: userRole === 'tech' ? 'homeowner' : 'tech',
+      user_id: userId,
+      user_name: userName,
+      user_role: userRole,
+      recipient_role: (userRole === 'tech' ? 'homeowner' : 'tech') as 'tech' | 'homeowner' | 'admin'
     };
     
     await updateBlueprint(propertyId, updatedBlueprint, historyEntry, notification);
@@ -770,12 +640,59 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     await updateBlueprint(propertyId, updatedBlueprint);
   }, [subscriptions, updateBlueprint]);
 
+  // Update getUnreadNotifications to use correct property name
   const getUnreadNotifications = useCallback((propertyId: string, role: 'tech' | 'homeowner' | 'admin') => {
     const subscription = subscriptions[propertyId];
     if (!subscription?.blueprint) return [];
     
-    return (subscription.blueprint.notifications || []).filter(n => !n.read && n.recipientRole === role);
+    return (subscription.blueprint.notifications || [])
+      .filter(n => !n.read && n.recipient_role === role);
   }, [subscriptions]);
+
+  const loadSubscription = useCallback(async (propertyId: string) => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      let subscriptionData = null;
+
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        subscriptionData = parsed[propertyId] || null;
+      }
+
+      if (!subscriptionData) {
+        // Create new subscription if none exists
+        subscriptionData = {
+          id: `sub-${Date.now()}`,
+          propertyId,
+          status: 'active',
+          startDate: new Date().toISOString(),
+          nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          monthlyPrice: 299,
+          visits: generateMockVisits(propertyId),
+          snapshotInspections: [],
+          hasCompletedSnapshot: false,
+          currentScore: generateMockScore(propertyId),
+          personalDirector: {
+            name: 'James Mitchell',
+            phone: '1-800-HUDSON',
+            email: 'james.mitchell@hudson.com',
+            photo: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
+          },
+        };
+      }
+
+      // Update subscriptions state
+      setSubscriptions(prev => ({
+        ...prev,
+        [propertyId]: subscriptionData,
+      }));
+
+      return subscriptionData;
+    } catch (error) {
+      console.error('Error loading subscription:', error);
+      throw error;
+    }
+  }, []);
 
   return useMemo(() => ({
     subscriptions,
@@ -789,12 +706,6 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     completeTask,
     getNextVisit,
     getRecentVisits,
-    cancelSubscription,
-    addCustomProject,
-    removeCustomProject,
-    updateCustomProject,
-    addMonthlyVisitRequest,
-    removeMonthlyVisitRequest,
     createSnapshotInspection,
     updateSnapshotInspection,
     addRoomInspection,
@@ -808,6 +719,7 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     removePlanItem,
     markNotificationAsRead,
     getUnreadNotifications,
+    loadSubscription,
   }), [
     subscriptions,
     isLoading,
@@ -820,12 +732,6 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     completeTask,
     getNextVisit,
     getRecentVisits,
-    cancelSubscription,
-    addCustomProject,
-    removeCustomProject,
-    updateCustomProject,
-    addMonthlyVisitRequest,
-    removeMonthlyVisitRequest,
     createSnapshotInspection,
     updateSnapshotInspection,
     addRoomInspection,
@@ -839,5 +745,6 @@ export const [SubscriptionProvider, useSubscription] = createContextHook(() => {
     removePlanItem,
     markNotificationAsRead,
     getUnreadNotifications,
+    loadSubscription,
   ]);
 });

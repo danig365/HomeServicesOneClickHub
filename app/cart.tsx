@@ -8,7 +8,7 @@ import { COLORS } from '@/constants/colors';
 export default function CartScreen() {
   const { items, removeFromCart, updateQuantity, getTotalPrice, clearCart } = useCart();
   const totalPrice = getTotalPrice();
-
+console.log('🛒 Cart Debug:', { itemsCount: items.length, totalPrice, items });
   const handleCheckout = () => {
     if (items.length === 0) {
       Alert.alert('Cart Empty', 'Please add services to your cart before checkout.');
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     color: COLORS.teal,
   },
   checkoutButton: {
-    backgroundColor: COLORS.accent.success,
+    backgroundColor: COLORS.darkTeal,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',

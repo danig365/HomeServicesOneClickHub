@@ -29,10 +29,7 @@ import {
   Calendar,
   FileText,
   ClipboardList,
-  CheckCircle,
-  XCircle,
-  Clock,
-  AlertCircle,
+  CheckCircle
 } from 'lucide-react-native';
 import { Service } from '@/types/service';
 import { User } from '@/types/user';

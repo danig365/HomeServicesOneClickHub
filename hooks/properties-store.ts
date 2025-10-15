@@ -1,254 +1,424 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Property, PropertyInsight, PropertyReminder } from '@/types/property';
+import { supabase } from '@/lib/supabase';
+import { 
+  PropertyInput,
+  PropertyInsightInput,
+  PropertyReminderInput,
+  LegacyProperty,
+  toLegacyProperty,
+  toDbPropertyInput
+} from '@/types/property';
 
-const STORAGE_KEY = 'hudson_properties';
-
-const mockProperties: Property[] = [
-  {
-    id: '1',
-    name: 'Main Residence',
-    address: '123 Luxury Lane',
-    city: 'Beverly Hills',
-    state: 'CA',
-    zipCode: '90210',
-    type: 'primary',
-    isPrimary: true,
-    imageUrl: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800',
-    purchaseDate: '2020-05-15',
-    squareFeet: 4500,
-    bedrooms: 5,
-    bathrooms: 4,
-  },
-  {
-    id: '2',
-    name: 'Beach House',
-    address: '456 Ocean Drive',
-    city: 'Malibu',
-    state: 'CA',
-    zipCode: '90265',
-    type: 'vacation',
-    isPrimary: false,
-    imageUrl: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800',
-    purchaseDate: '2021-08-20',
-    squareFeet: 3200,
-    bedrooms: 4,
-    bathrooms: 3,
-  },
-];
+const SELECTED_PROPERTY_KEY = 'selected_property_id';
 
 export const [PropertiesProvider, useProperties] = createContextHook(() => {
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [properties, setProperties] = useState<LegacyProperty[]>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  const loadProperties = useCallback(async () => {
-    try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      const selectedId = await AsyncStorage.getItem('selected_property_id');
-      
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setProperties(parsed);
-        if (selectedId) {
-          setSelectedPropertyId(selectedId);
-        } else {
-          const primary = parsed.find((p: Property) => p.isPrimary);
-          setSelectedPropertyId(primary?.id || parsed[0]?.id || null);
-        }
-      } else {
-        setProperties(mockProperties);
-        setSelectedPropertyId(mockProperties[0].id);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mockProperties));
-        await AsyncStorage.setItem('selected_property_id', mockProperties[0].id);
+  // Initialize and get current user
+  useEffect(() => {
+    const initializeUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
       }
+    };
+    initializeUser();
+  }, []);
+
+  // Load properties from Supabase
+  const loadProperties = useCallback(async () => {
+    if (!userId) return;
+
+    try {
+      setIsLoading(true);
+      console.log('[Properties] Loading properties for user:', userId);
+
+      // Fetch properties with full data
+      const { data: propertiesData, error: propertiesError } = await supabase
+        .from('properties')
+        .select(`
+          *,
+          blueprints (*),
+          property_insights (*),
+          property_reminders (*)
+        `)
+        .eq('user_id', userId)
+        .order('is_primary', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (propertiesError) throw propertiesError;
+
+      // Transform and set properties
+      const legacyProperties = propertiesData?.map(prop => {
+        const propInsights = prop.property_insights || [];
+        const propReminders = prop.property_reminders || [];
+        return toLegacyProperty(prop, propInsights, propReminders);
+      }) || [];
+
+      setProperties(legacyProperties);
+
+      // Handle property selection
+      const storedSelectedId = await AsyncStorage.getItem(SELECTED_PROPERTY_KEY);
+      if (storedSelectedId && legacyProperties.some(p => p.id === storedSelectedId)) {
+        setSelectedPropertyId(storedSelectedId);
+      } else {
+        const primary = legacyProperties.find(p => p.isPrimary);
+        const selected = primary?.id || legacyProperties[0]?.id || null;
+        setSelectedPropertyId(selected);
+        if (selected) {
+          await AsyncStorage.setItem(SELECTED_PROPERTY_KEY, selected);
+        }
+      }
+
+      console.log('[Properties] Loaded', legacyProperties.length, 'properties');
     } catch (error) {
-      console.error('Failed to load properties:', error);
-      setProperties(mockProperties);
-      setSelectedPropertyId(mockProperties[0].id);
+      console.error('[Properties] Error loading properties:', error);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
-    loadProperties();
-  }, [loadProperties]);
-
-  const saveProperties = useCallback(async (newProperties: Property[]) => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newProperties));
-      setProperties(newProperties);
-    } catch (error) {
-      console.error('Failed to save properties:', error);
+    if (userId) {
+      loadProperties();
     }
-  }, []);
+  }, [userId, loadProperties]);
 
-  const addProperty = useCallback(async (property: Omit<Property, 'id'>) => {
-    const newProperty: Property = {
-      ...property,
-      id: Date.now().toString(),
-    };
-    
-    let updatedProperties = [...properties, newProperty];
-    
-    if (newProperty.isPrimary) {
-      updatedProperties = updatedProperties.map(p => 
-        p.id === newProperty.id ? p : { ...p, isPrimary: false }
-      );
-    }
-    
-    await saveProperties(updatedProperties);
-    return newProperty;
-  }, [properties, saveProperties]);
-
-  const updateProperty = useCallback(async (id: string, updates: Partial<Property>) => {
-    let updatedProperties = properties.map(p =>
-      p.id === id ? { ...p, ...updates } : p
-    );
-    
-    if (updates.isPrimary) {
-      updatedProperties = updatedProperties.map(p =>
-        p.id === id ? p : { ...p, isPrimary: false }
-      );
-    }
-    
-    await saveProperties(updatedProperties);
-  }, [properties, saveProperties]);
-
-  const deleteProperty = useCallback(async (id: string) => {
-    const updatedProperties = properties.filter(p => p.id !== id);
-    
-    if (updatedProperties.length > 0 && !updatedProperties.some(p => p.isPrimary)) {
-      updatedProperties[0].isPrimary = true;
-    }
-    
-    await saveProperties(updatedProperties);
-    
-    if (selectedPropertyId === id) {
-      const newSelected = updatedProperties[0]?.id || null;
-      setSelectedPropertyId(newSelected);
-      if (newSelected) {
-        await AsyncStorage.setItem('selected_property_id', newSelected);
-      }
-    }
-  }, [properties, selectedPropertyId, saveProperties]);
-
+  // Select property
   const selectProperty = useCallback(async (id: string) => {
     setSelectedPropertyId(id);
     try {
-      await AsyncStorage.setItem('selected_property_id', id);
+      await AsyncStorage.setItem(SELECTED_PROPERTY_KEY, id);
     } catch (error) {
       console.error('Failed to save selected property:', error);
     }
   }, []);
 
+  // Add property
+  const addProperty = useCallback(async (property: Omit<LegacyProperty, 'id' | 'insights' | 'reminders'>) => {
+    if (!userId) throw new Error('User not authenticated');
+
+    try {
+      const dbInput = toDbPropertyInput(property) as PropertyInput;
+
+      // If this is the first property, set it as primary
+      const { data: existingProps } = await supabase
+        .from('properties')
+        .select('id')
+        .eq('user_id', userId);
+
+      const shouldBePrimary = !existingProps || existingProps.length === 0;
+
+      // Start a Supabase transaction
+      const { data: result, error: transactionError } = await supabase.rpc('create_property_with_blueprint', {
+        property_data: {
+          ...dbInput,
+          user_id: userId,
+          is_primary: shouldBePrimary || dbInput.is_primary,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        subscription_data: {
+          status: 'active',
+          start_date: new Date().toISOString(),
+          next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          monthly_price: 299
+        }
+      });
+
+      if (transactionError) throw transactionError;
+
+      // Load the newly created property
+      const { data: propertyData, error: propertyError } = await supabase
+        .from('properties')
+        .select('*')
+        .eq('id', result.property_id)
+        .single();
+
+      if (propertyError) throw propertyError;
+
+      const newProperty = toLegacyProperty(propertyData, [], []);
+      
+      // Update local state
+      setProperties(prev => [...prev, newProperty]);
+      
+      // If this is the first property or set as primary, select it
+      if (shouldBePrimary || property.isPrimary) {
+        await selectProperty(newProperty.id);
+      }
+
+      // Trigger a refresh to ensure all related data is loaded
+      await loadProperties();
+      
+      return newProperty;
+    } catch (error) {
+      console.error('Failed to add property:', error);
+      throw error;
+    }
+  }, [userId, selectProperty, loadProperties]);
+
+  // Update property
+  const updateProperty = useCallback(async (id: string, updates: Partial<LegacyProperty>) => {
+    if (!userId) throw new Error('User not authenticated');
+
+    try {
+      const dbUpdates = toDbPropertyInput(updates);
+
+      // If setting as primary, unset other primary properties first
+      if (dbUpdates.is_primary) {
+        await supabase
+          .from('properties')
+          .update({ is_primary: false })
+          .eq('user_id', userId)
+          .eq('is_primary', true)
+          .neq('id', id);
+      }
+
+      const { error } = await supabase
+        .from('properties')
+        .update(dbUpdates)
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Reload to get fresh data with insights and reminders
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to update property:', error);
+      throw error;
+    }
+  }, [userId, loadProperties]);
+
+  // Delete property
+  const deleteProperty = useCallback(async (id: string) => {
+    if (!userId) throw new Error('User not authenticated');
+
+    try {
+      const { error } = await supabase
+        .from('properties')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      setProperties(prev => {
+        const updated = prev.filter(p => p.id !== id);
+        
+        // If no primary property, set first as primary
+        if (updated.length > 0 && !updated.some(p => p.isPrimary)) {
+          updateProperty(updated[0].id, { isPrimary: true });
+        }
+        
+        return updated;
+      });
+
+      // Update selected property if needed
+      if (selectedPropertyId === id) {
+        const remaining = properties.filter(p => p.id !== id);
+        const newSelected = remaining[0]?.id || null;
+        setSelectedPropertyId(newSelected);
+        if (newSelected) {
+          await AsyncStorage.setItem(SELECTED_PROPERTY_KEY, newSelected);
+        } else {
+          await AsyncStorage.removeItem(SELECTED_PROPERTY_KEY);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete property:', error);
+      throw error;
+    }
+  }, [userId, selectedPropertyId, properties, updateProperty]);
+
+  // Get selected property
   const getSelectedProperty = useCallback(() => {
     return properties.find(p => p.id === selectedPropertyId) || properties[0] || null;
   }, [properties, selectedPropertyId]);
 
+  // Get primary property
   const getPrimaryProperty = useCallback(() => {
     return properties.find(p => p.isPrimary) || properties[0] || null;
   }, [properties]);
 
-  const addInsight = useCallback(async (propertyId: string, insight: Omit<PropertyInsight, 'id'>) => {
-    const property = properties.find(p => p.id === propertyId);
-    if (!property) return;
+  // Add insight
+  const addInsight = useCallback(async (propertyId: string, insight: Omit<PropertyInsightInput, 'property_id'>) => {
+    if (!userId) throw new Error('User not authenticated');
 
-    const newInsight: PropertyInsight = {
-      ...insight,
-      id: Date.now().toString(),
-    };
+    try {
+      const { error } = await supabase
+        .from('property_insights')
+        .insert([{ ...insight, property_id: propertyId }])
+        .select()
+        .single();
 
-    const updatedInsights = [...(property.insights || []), newInsight];
-    await updateProperty(propertyId, { insights: updatedInsights });
-  }, [properties, updateProperty]);
+      if (error) throw error;
 
-  const updateInsight = useCallback(async (propertyId: string, insightId: string, updates: Partial<PropertyInsight>) => {
-    const property = properties.find(p => p.id === propertyId);
-    if (!property || !property.insights) return;
+      // Reload properties to update insights
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to add insight:', error);
+      throw error;
+    }
+  }, [userId, loadProperties]);
 
-    const updatedInsights = property.insights.map(insight =>
-      insight.id === insightId ? { ...insight, ...updates } : insight
-    );
-    await updateProperty(propertyId, { insights: updatedInsights });
-  }, [properties, updateProperty]);
+  // Update insight
+  const updateInsight = useCallback(async (propertyId: string, insightId: string, updates: Partial<PropertyInsightInput>) => {
+    if (!userId) throw new Error('User not authenticated');
 
+    try {
+      const { error } = await supabase
+        .from('property_insights')
+        .update(updates)
+        .eq('id', insightId)
+        .eq('property_id', propertyId);
+
+      if (error) throw error;
+
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to update insight:', error);
+      throw error;
+    }
+  }, [userId, loadProperties]);
+
+  // Delete insight
   const deleteInsight = useCallback(async (propertyId: string, insightId: string) => {
-    const property = properties.find(p => p.id === propertyId);
-    if (!property || !property.insights) return;
+    if (!userId) throw new Error('User not authenticated');
 
-    const updatedInsights = property.insights.filter(insight => insight.id !== insightId);
-    await updateProperty(propertyId, { insights: updatedInsights });
-  }, [properties, updateProperty]);
+    try {
+      const { error } = await supabase
+        .from('property_insights')
+        .delete()
+        .eq('id', insightId)
+        .eq('property_id', propertyId);
 
-  const addReminder = useCallback(async (propertyId: string, reminder: Omit<PropertyReminder, 'id' | 'propertyId'>) => {
-    const property = properties.find(p => p.id === propertyId);
-    if (!property) return;
+      if (error) throw error;
 
-    const newReminder: PropertyReminder = {
-      ...reminder,
-      id: Date.now().toString(),
-      propertyId,
-    };
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to delete insight:', error);
+      throw error;
+    }
+  }, [userId, loadProperties]);
 
-    const updatedReminders = [...(property.reminders || []), newReminder];
-    await updateProperty(propertyId, { reminders: updatedReminders });
-  }, [properties, updateProperty]);
+  // Add reminder
+  const addReminder = useCallback(async (propertyId: string, reminder: PropertyReminderInput) => {
+    if (!userId) throw new Error('User not authenticated');
 
-  const updateReminder = useCallback(async (propertyId: string, reminderId: string, updates: Partial<PropertyReminder>) => {
-    const property = properties.find(p => p.id === propertyId);
-    if (!property || !property.reminders) return;
+    try {
+      const { error } = await supabase
+        .from('property_reminders')
+        .insert([{ ...reminder, property_id: propertyId }])
+        .select()
+        .single();
 
-    const updatedReminders = property.reminders.map(reminder =>
-      reminder.id === reminderId ? { ...reminder, ...updates } : reminder
-    );
-    await updateProperty(propertyId, { reminders: updatedReminders });
-  }, [properties, updateProperty]);
+      if (error) throw error;
 
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to add reminder:', error);
+      throw error;
+    }
+  }, [userId, loadProperties]);
+
+  // Update reminder
+  const updateReminder = useCallback(async (propertyId: string, reminderId: string, updates: Partial<PropertyReminderInput>) => {
+    if (!userId) throw new Error('User not authenticated');
+
+    try {
+      const { error } = await supabase
+        .from('property_reminders')
+        .update(updates)
+        .eq('id', reminderId)
+        .eq('property_id', propertyId);
+
+      if (error) throw error;
+
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to update reminder:', error);
+      throw error;
+    }
+  }, [userId, loadProperties]);
+
+  // Delete reminder
   const deleteReminder = useCallback(async (propertyId: string, reminderId: string) => {
-    const property = properties.find(p => p.id === propertyId);
-    if (!property || !property.reminders) return;
+    if (!userId) throw new Error('User not authenticated');
 
-    const updatedReminders = property.reminders.filter(reminder => reminder.id !== reminderId);
-    await updateProperty(propertyId, { reminders: updatedReminders });
-  }, [properties, updateProperty]);
+    try {
+      const { error } = await supabase
+        .from('property_reminders')
+        .delete()
+        .eq('id', reminderId)
+        .eq('property_id', propertyId);
 
+      if (error) throw error;
+
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to delete reminder:', error);
+      throw error;
+    }
+  }, [userId, loadProperties]);
+
+  // Complete reminder
   const completeReminder = useCallback(async (propertyId: string, reminderId: string) => {
-    const property = properties.find(p => p.id === propertyId);
-    if (!property || !property.reminders) return;
+    if (!userId) throw new Error('User not authenticated');
 
-    const reminder = property.reminders.find(r => r.id === reminderId);
-    if (!reminder) return;
+    try {
+      const property = properties.find(p => p.id === propertyId);
+      if (!property || !property.reminders) return;
 
-    const updates: Partial<PropertyReminder> = {
-      completed: true,
-      completedDate: new Date().toISOString(),
-    };
+      const reminder = property.reminders.find(r => r.id === reminderId);
+      if (!reminder) return;
 
-    if (reminder.recurring && reminder.recurringInterval) {
-      const nextDueDate = new Date(reminder.dueDate);
-      nextDueDate.setDate(nextDueDate.getDate() + reminder.recurringInterval);
-      
-      const newReminder: PropertyReminder = {
-        ...reminder,
-        id: Date.now().toString(),
-        dueDate: nextDueDate.toISOString(),
-        completed: false,
-        completedDate: undefined,
+      const updates: Partial<PropertyReminderInput & { completed: boolean; completed_date: string }> = {
+        completed: true,
+        completed_date: new Date().toISOString(),
       };
 
-      const updatedReminders = property.reminders.map(r =>
-        r.id === reminderId ? { ...r, ...updates } : r
-      ).concat(newReminder);
-      
-      await updateProperty(propertyId, { reminders: updatedReminders });
-    } else {
-      await updateReminder(propertyId, reminderId, updates);
-    }
-  }, [properties, updateProperty, updateReminder]);
+      const { error } = await supabase
+        .from('property_reminders')
+        .update(updates)
+        .eq('id', reminderId)
+        .eq('property_id', propertyId);
 
+      if (error) throw error;
+
+      // If recurring, create a new reminder
+      if (reminder.recurring && reminder.recurringInterval) {
+        const nextDueDate = new Date(reminder.dueDate);
+        nextDueDate.setDate(nextDueDate.getDate() + reminder.recurringInterval);
+
+        await addReminder(propertyId, {
+          title: reminder.title,
+          description: reminder.description,
+          due_date: nextDueDate.toISOString(),
+          type: reminder.type,
+          priority: reminder.priority,
+          recurring: reminder.recurring,
+          recurring_interval: reminder.recurringInterval,
+          created_by: reminder.createdBy,
+          created_by_role: reminder.createdByRole,
+        });
+      }
+
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to complete reminder:', error);
+      throw error;
+    }
+  }, [userId, properties, loadProperties, addReminder]);
+
+  // Get upcoming reminders
   const getUpcomingReminders = useCallback((propertyId: string, days: number = 30) => {
     const property = properties.find(p => p.id === propertyId);
     if (!property || !property.reminders) return [];
@@ -262,6 +432,7 @@ export const [PropertiesProvider, useProperties] = createContextHook(() => {
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
   }, [properties]);
 
+  // Get overdue reminders
   const getOverdueReminders = useCallback((propertyId: string) => {
     const property = properties.find(p => p.id === propertyId);
     if (!property || !property.reminders) return [];
@@ -291,6 +462,7 @@ export const [PropertiesProvider, useProperties] = createContextHook(() => {
     completeReminder,
     getUpcomingReminders,
     getOverdueReminders,
+    refreshProperties: loadProperties,
   }), [
     properties,
     selectedPropertyId,
@@ -310,5 +482,6 @@ export const [PropertiesProvider, useProperties] = createContextHook(() => {
     completeReminder,
     getUpcomingReminders,
     getOverdueReminders,
+    loadProperties,
   ]);
 });

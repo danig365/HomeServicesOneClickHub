@@ -11,11 +11,9 @@ import {
   Linking,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Icons from 'lucide-react-native';
 import { useVault } from '@/hooks/vault-store';
-import { Document } from '@/types/document';
 import { COLORS } from '@/constants/colors';
 
 const categoryConfig = {
@@ -34,7 +32,6 @@ const categoryConfig = {
 export default function DocumentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { documents, updateDocument, deleteDocument } = useVault();
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -58,15 +55,20 @@ export default function DocumentDetailScreen() {
   const IconComponent = (Icons as any)[categoryConfig_.icon] || Icons.FileText;
 
   const handleToggleImportant = async () => {
-    await updateDocument(document.id, { isImportant: !document.isImportant });
+    try {
+      await updateDocument(document.id, { is_important: !document.is_important });
+    } catch (error) {
+      console.error('Error toggling important:', error);
+      Alert.alert('Error', 'Failed to update document');
+    }
   };
 
   const handleShare = async () => {
     try {
-      if (document.fileUrl) {
+      if (document.file_url) {
         await Share.share({
           message: `${document.title} - ${document.description || 'Document from Hudson MyHome Vault'}`,
-          url: document.fileUrl,
+          url: document.file_url,
         });
       } else {
         await Share.share({
@@ -79,9 +81,9 @@ export default function DocumentDetailScreen() {
   };
 
   const handleOpenFile = async () => {
-    if (document.fileUrl) {
+    if (document.file_url) {
       try {
-        await Linking.openURL(document.fileUrl);
+        await Linking.openURL(document.file_url);
       } catch (error) {
         Alert.alert('Error', 'Unable to open document file.');
       }
@@ -100,9 +102,15 @@ export default function DocumentDetailScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            setIsDeleting(true);
-            await deleteDocument(document.id);
-            router.back();
+            try {
+              setIsDeleting(true);
+              await deleteDocument(document.id);
+              router.back();
+            } catch (error) {
+              console.error('Error deleting document:', error);
+              Alert.alert('Error', 'Failed to delete document');
+              setIsDeleting(false);
+            }
           },
         },
       ]
@@ -122,8 +130,8 @@ export default function DocumentDetailScreen() {
   };
 
   const isExpiringSoon = () => {
-    if (!document.expirationDate) return false;
-    const expDate = new Date(document.expirationDate);
+    if (!document.expiration_date) return false;
+    const expDate = new Date(document.expiration_date);
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + 30);
     return expDate <= futureDate && expDate >= new Date();
@@ -155,8 +163,8 @@ export default function DocumentDetailScreen() {
             style={styles.headerGradient}
           >
             <View style={styles.headerContent}>
-              {document.imageUrl ? (
-                <Image source={{ uri: document.imageUrl }} style={styles.documentImage} />
+              {document.image_url ? (
+                <Image source={{ uri: document.image_url }} style={styles.documentImage} />
               ) : (
                 <View style={[styles.documentIcon, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
                   <IconComponent size={48} color="white" />
@@ -169,8 +177,8 @@ export default function DocumentDetailScreen() {
                   <TouchableOpacity onPress={handleToggleImportant}>
                     <Icons.Star 
                       size={24} 
-                      color={document.isImportant ? '#F59E0B' : 'rgba(255,255,255,0.6)'} 
-                      fill={document.isImportant ? '#F59E0B' : 'transparent'}
+                      color={document.is_important ? '#F59E0B' : 'rgba(255,255,255,0.6)'} 
+                      fill={document.is_important ? '#F59E0B' : 'transparent'}
                     />
                   </TouchableOpacity>
                 </View>
@@ -203,7 +211,9 @@ export default function DocumentDetailScreen() {
             disabled={isDeleting}
           >
             <Icons.Trash2 size={20} color="#DC2626" />
-            <Text style={[styles.actionText, styles.deleteText]}>Delete</Text>
+            <Text style={[styles.actionText, styles.deleteText]}>
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -223,17 +233,24 @@ export default function DocumentDetailScreen() {
             <Text style={styles.detailValue}>{document.type}</Text>
           </View>
           
+          {document.file_name && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>File Name</Text>
+              <Text style={styles.detailValue}>{document.file_name}</Text>
+            </View>
+          )}
+          
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Date Added</Text>
-            <Text style={styles.detailValue}>{formatDate(document.dateAdded)}</Text>
+            <Text style={styles.detailValue}>{formatDate(document.created_at)}</Text>
           </View>
           
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Last Modified</Text>
-            <Text style={styles.detailValue}>{formatDate(document.dateModified)}</Text>
+            <Text style={styles.detailValue}>{formatDate(document.updated_at)}</Text>
           </View>
           
-          {document.expirationDate && (
+          {document.expiration_date && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Expiration Date</Text>
               <View style={styles.expirationContainer}>
@@ -241,7 +258,7 @@ export default function DocumentDetailScreen() {
                   styles.detailValue,
                   isExpiringSoon() && styles.expiringText
                 ]}>
-                  {formatDate(document.expirationDate)}
+                  {formatDate(document.expiration_date)}
                 </Text>
                 {isExpiringSoon() && (
                   <View style={styles.expiringBadge}>
@@ -253,14 +270,14 @@ export default function DocumentDetailScreen() {
             </View>
           )}
           
-          {document.reminderDate && (
+          {document.reminder_date && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Reminder Date</Text>
-              <Text style={styles.detailValue}>{formatDate(document.reminderDate)}</Text>
+              <Text style={styles.detailValue}>{formatDate(document.reminder_date)}</Text>
             </View>
           )}
           
-          {document.tags.length > 0 && (
+          {document.tags && document.tags.length > 0 && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Tags</Text>
               <View style={styles.tagsContainer}>
@@ -276,9 +293,7 @@ export default function DocumentDetailScreen() {
       </ScrollView>
     </View>
   );
-}
-
-const styles = StyleSheet.create({
+}const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.cream,

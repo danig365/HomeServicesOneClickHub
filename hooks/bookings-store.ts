@@ -1,76 +1,153 @@
 import createContextHook from '@nkzw/create-context-hook';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
-import { Booking, RecurringService } from '@/types/service';
+import { Booking, RecurringService,BookingDB, RecurringServiceDB  } from '@/types/service';
+import { supabase } from '@/lib/supabase';
 
 export const [BookingsProvider, useBookings] = createContextHook(() => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [recurringServices, setRecurringServices] = useState<RecurringService[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
+const [userId, setUserId] = useState<string | null>(null);
   useEffect(() => {
+  const initUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      setUserId(user.id);
+    }
+  };
+  initUser();
+}, []);
+
+useEffect(() => {
+  if (userId) {
     loadBookings();
     loadRecurringServices();
-  }, []);
+  }
+}, [userId]);
+const loadBookings = async () => {
+  if (!userId) return;
+  try {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('user_id', userId)
+      .order('scheduled_date', { ascending: true });
 
-  const loadBookings = async () => {
-    try {
-      const stored = await AsyncStorage.getItem('bookings');
-      if (stored) {
-        setBookings(JSON.parse(stored));
-      }
-    } catch (error) {
-      console.error('Failed to load bookings:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    if (error) throw error;
 
+    const legacy: Booking[] = (data || []).map(db => ({
+      id: db.id,
+      serviceId: db.service_id,
+      serviceName: db.service_name,
+      date: db.scheduled_date,
+      time: db.scheduled_time,
+      status: db.status as 'upcoming' | 'completed' | 'cancelled',
+      price: Number(db.price),
+      address: '', // Load from property if needed
+      providerName: db.provider_name || undefined,
+      propertyId: db.property_id,
+    }));
+
+    setBookings(legacy);
+  } catch (error) {
+    console.error('Failed to load bookings:', error);
+  } finally {
+    setIsLoading(false);
+  }
+};
   const loadRecurringServices = async () => {
-    try {
-      const stored = await AsyncStorage.getItem('recurringServices');
-      if (stored) {
-        setRecurringServices(JSON.parse(stored));
-      }
-    } catch (error) {
-      console.error('Failed to load recurring services:', error);
-    }
-  };
+  if (!userId) return;
+  try {
+    const { data, error } = await supabase
+      .from('recurring_services')
+      .select('*')
+      .eq('user_id', userId)
+      .order('next_service_date', { ascending: true });
 
-  const saveBookings = async (newBookings: Booking[]) => {
-    try {
-      await AsyncStorage.setItem('bookings', JSON.stringify(newBookings));
-    } catch (error) {
-      console.error('Failed to save bookings:', error);
-    }
-  };
+    if (error) throw error;
 
-  const saveRecurringServices = async (services: RecurringService[]) => {
-    try {
-      await AsyncStorage.setItem('recurringServices', JSON.stringify(services));
-    } catch (error) {
-      console.error('Failed to save recurring services:', error);
-    }
-  };
+    const legacy: RecurringService[] = (data || []).map(db => ({
+      id: db.id,
+      serviceId: db.service_id,
+      serviceName: db.service_name,
+      frequency: db.frequency as 'monthly' | 'quarterly' | 'bi-annual' | 'annual',
+      price: Number(db.price),
+      startDate: db.start_date,
+      nextServiceDate: db.next_service_date,
+      status: db.status as 'active' | 'paused' | 'cancelled',
+      autoRenew: db.auto_renew,
+      propertyId: db.property_id,
+    }));
 
-  const addBooking = (booking: Omit<Booking, 'id'>) => {
-    const newBooking: Booking = {
-      ...booking,
-      id: Date.now().toString()
+    setRecurringServices(legacy);
+  } catch (error) {
+    console.error('Failed to load recurring services:', error);
+  }
+};
+  // const saveBookings = async (newBookings: Booking[]) => {
+  //   try {
+  //     await AsyncStorage.setItem('bookings', JSON.stringify(newBookings));
+  //   } catch (error) {
+  //     console.error('Failed to save bookings:', error);
+  //   }
+  // };
+
+  // const saveRecurringServices = async (services: RecurringService[]) => {
+  //   try {
+  //     await AsyncStorage.setItem('recurringServices', JSON.stringify(services));
+  //   } catch (error) {
+  //     console.error('Failed to save recurring services:', error);
+  //   }
+  // };
+
+  const addBooking = async (booking: Omit<Booking, 'id'>) => {
+  if (!userId) throw new Error('Not authenticated');
+
+  try {
+    const dbBooking: Omit<BookingDB, 'id' | 'created_at' | 'updated_at'> = {
+      user_id: userId,
+      property_id: booking.propertyId || '',
+      service_id: booking.serviceId,
+      service_name: booking.serviceName,
+      scheduled_date: booking.date,
+      scheduled_time: booking.time,
+      status: booking.status,
+      price: booking.price,
+      provider_name: booking.providerName || null,
+      notes: null,
     };
-    const newBookings = [...bookings, newBooking];
-    setBookings(newBookings);
-    saveBookings(newBookings);
-    return newBooking;
-  };
 
-  const cancelBooking = (bookingId: string) => {
-    const newBookings = bookings.map(booking =>
-      booking.id === bookingId ? { ...booking, status: 'cancelled' as const } : booking
-    );
-    setBookings(newBookings);
-    saveBookings(newBookings);
-  };
+    const { data, error } = await supabase
+      .from('bookings')
+      .insert([dbBooking])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await loadBookings();
+    return data as any;
+  } catch (error) {
+    console.error('Failed to add booking:', error);
+    throw error;
+  }
+};
+
+const cancelBooking = async (bookingId: string) => {
+  try {
+    const { error } = await supabase
+      .from('bookings')
+      .update({ status: 'cancelled' })
+      .eq('id', bookingId)
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    await loadBookings();
+  } catch (error) {
+    console.error('Failed to cancel booking:', error);
+    throw error;
+  }
+};
 
   const getUpcomingBookings = () => {
     return bookings.filter(b => b.status === 'upcoming');
@@ -79,37 +156,74 @@ export const [BookingsProvider, useBookings] = createContextHook(() => {
   const getPastBookings = () => {
     return bookings.filter(b => b.status === 'completed' || b.status === 'cancelled');
   };
+const addRecurringService = async (service: Omit<RecurringService, 'id'>) => {
+  if (!userId) throw new Error('Not authenticated');
 
-  const addRecurringService = (service: Omit<RecurringService, 'id'>) => {
-    const newService: RecurringService = {
-      ...service,
-      id: Date.now().toString()
+  try {
+    const dbService: Omit<RecurringServiceDB, 'id' | 'created_at' | 'updated_at'> = {
+      user_id: userId,
+      property_id: service.propertyId || '',
+      service_id: service.serviceId,
+      service_name: service.serviceName,
+      frequency: service.frequency,
+      price: service.price,
+      start_date: service.startDate,
+      next_service_date: service.nextServiceDate,
+      status: service.status,
+      auto_renew: service.autoRenew,
     };
-    const newServices = [...recurringServices, newService];
-    setRecurringServices(newServices);
-    saveRecurringServices(newServices);
-    return newService;
-  };
 
-  const updateRecurringService = (serviceId: string, updates: Partial<RecurringService>) => {
-    const newServices = recurringServices.map(service =>
-      service.id === serviceId ? { ...service, ...updates } : service
-    );
-    setRecurringServices(newServices);
-    saveRecurringServices(newServices);
-  };
+    const { data, error } = await supabase
+      .from('recurring_services')
+      .insert([dbService])
+      .select()
+      .single();
 
-  const pauseRecurringService = (serviceId: string) => {
-    updateRecurringService(serviceId, { status: 'paused' });
-  };
+    if (error) throw error;
 
-  const resumeRecurringService = (serviceId: string) => {
-    updateRecurringService(serviceId, { status: 'active' });
-  };
+    await loadRecurringServices();
+    return data as any;
+  } catch (error) {
+    console.error('Failed to add recurring service:', error);
+    throw error;
+  }
+};
 
-  const cancelRecurringService = (serviceId: string) => {
-    updateRecurringService(serviceId, { status: 'cancelled' });
-  };
+const updateRecurringService = async (serviceId: string, updates: Partial<RecurringService>) => {
+  if (!userId) return;
+
+  try {
+    const dbUpdates: any = {};
+    if (updates.nextServiceDate) dbUpdates.next_service_date = updates.nextServiceDate;
+    if (updates.status) dbUpdates.status = updates.status;
+    if (updates.autoRenew !== undefined) dbUpdates.auto_renew = updates.autoRenew;
+    if (updates.price !== undefined) dbUpdates.price = updates.price;
+
+    const { error } = await supabase
+      .from('recurring_services')
+      .update(dbUpdates)
+      .eq('id', serviceId)
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    await loadRecurringServices();
+  } catch (error) {
+    console.error('Failed to update recurring service:', error);
+    throw error;
+  }
+};
+
+const pauseRecurringService = async (serviceId: string) => {
+  await updateRecurringService(serviceId, { status: 'paused' });
+};
+
+const resumeRecurringService = async (serviceId: string) => {
+  await updateRecurringService(serviceId, { status: 'active' });
+};
+
+const cancelRecurringService = async (serviceId: string) => {
+  await updateRecurringService(serviceId, { status: 'cancelled' });
+};
 
   const getActiveRecurringServices = () => {
     return recurringServices.filter(s => s.status === 'active');

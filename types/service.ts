@@ -45,3 +45,35 @@ export interface RecurringService {
   autoRenew: boolean;
   propertyId?: string;
 }
+// Database types for Supabase
+export interface BookingDB {
+  id: string;
+  user_id: string;
+  property_id: string;
+  service_id: string;
+  service_name: string;
+  scheduled_date: string;
+  scheduled_time: string;
+  status: 'upcoming' | 'completed' | 'cancelled';
+  price: number;
+  provider_name?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecurringServiceDB {
+  id: string;
+  user_id: string;
+  property_id: string;
+  service_id: string;
+  service_name: string;
+  frequency: 'monthly' | 'quarterly' | 'bi-annual' | 'annual';
+  price: number;
+  start_date: string;
+  next_service_date: string;
+  status: 'active' | 'paused' | 'cancelled';
+  auto_renew: boolean;
+  created_at: string;
+  updated_at: string;
+}

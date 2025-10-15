@@ -16,13 +16,33 @@ export default function PropertySelector({ onPropertyChange, style }: PropertySe
   const selectedProperty = getSelectedProperty();
 
   const handleSelectProperty = async (propertyId: string) => {
-    await selectProperty(propertyId);
-    const property = properties.find(p => p.id === propertyId);
-    if (property && onPropertyChange) {
-      onPropertyChange(property);
-    }
-    setModalVisible(false);
-  };
+  await selectProperty(propertyId);
+  const legacyProperty = properties.find(p => p.id === propertyId);
+  if (legacyProperty && onPropertyChange) {
+    const property: Property = {
+      id: legacyProperty.id,
+      user_id: '', // or the actual user ID if available
+      name: legacyProperty.name,
+      address: legacyProperty.address,
+      city: legacyProperty.city,
+      state: legacyProperty.state,
+      zip_code: legacyProperty.zipCode,
+      type: legacyProperty.type,
+      image_url: legacyProperty.imageUrl,
+      is_primary: legacyProperty.isPrimary,
+      purchase_date: legacyProperty.purchaseDate || null,
+      square_feet: legacyProperty.squareFeet || null,
+      bedrooms: legacyProperty.bedrooms || null,
+      bathrooms: legacyProperty.bathrooms || null,
+      notes: legacyProperty.notes || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    onPropertyChange(property);
+  }
+  setModalVisible(false);
+};
+
 
   if (!selectedProperty) return null;
 
@@ -190,7 +210,7 @@ const styles = StyleSheet.create({
   },
   propertyItemSelected: {
     backgroundColor: COLORS.lightCream,
-    borderColor: COLORS.accent.success,
+    borderColor: COLORS.gold,
   },
   propertyImage: {
     width: 60,

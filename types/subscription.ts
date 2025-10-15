@@ -60,35 +60,52 @@ export interface FiveYearPlan {
   keyMilestones: string[];
 }
 
+export type BlueprintNotificationType = 
+  | 'plan_modified'
+  | 'project_added'
+  | 'project_completed'
+  | 'user_update'
+  | 'tech_update';
+
+export interface BlueprintNotification {
+  id: string;
+  blueprint_id: string;
+  property_id: string;
+  type: BlueprintNotificationType;
+  message: string;
+  user_id: string;
+  user_name: string;
+  user_role: 'tech' | 'homeowner' | 'admin';
+  recipient_role: 'tech' | 'homeowner' | 'admin';
+  read: boolean;
+  created_at: string;
+}
+
+export type BlueprintHistoryAction = 
+  | 'plan_item_added'
+  | 'plan_item_updated'
+  | 'plan_item_completed'
+  | 'plan_item_removed'
+  | 'project_added'
+  | 'project_updated'
+  | 'project_completed'
+  | 'project_removed';
+
 export interface BlueprintHistoryEntry {
   id: string;
-  timestamp: string;
-  action: 'created' | 'updated' | 'project_added' | 'project_updated' | 'project_completed' | 'plan_item_added' | 'plan_item_updated' | 'plan_item_completed' | 'plan_item_removed';
+  action: BlueprintHistoryAction;
   description: string;
   userId: string;
   userName: string;
   userRole: 'tech' | 'homeowner' | 'admin';
+  timestamp: string;
+  relatedItemId?: string;
+  relatedItemType?: 'plan_item' | 'project';
   changes?: {
     field: string;
-    oldValue?: any;
-    newValue?: any;
+    oldValue: any;
+    newValue: any;
   }[];
-  relatedItemId?: string;
-  relatedItemType?: 'project' | 'plan_item' | 'goal' | 'priority';
-}
-
-export interface BlueprintNotification {
-  id: string;
-  blueprintId: string;
-  propertyId: string;
-  timestamp: string;
-  type: 'user_update' | 'tech_update' | 'project_added' | 'project_completed' | 'plan_modified';
-  message: string;
-  userId: string;
-  userName: string;
-  userRole: 'tech' | 'homeowner' | 'admin';
-  read: boolean;
-  recipientRole: 'tech' | 'homeowner' | 'admin';
 }
 
 export interface MyHomeBlueprint {
@@ -104,7 +121,7 @@ export interface MyHomeBlueprint {
   timeline?: string;
   fiveYearPlan?: FiveYearPlan;
   history: BlueprintHistoryEntry[];
-  notifications: BlueprintNotification[];
+  notifications?: BlueprintNotification[];
 }
 
 export interface MyHomeScore {
@@ -192,19 +209,19 @@ export interface HudsonVisit {
 export interface Subscription {
   id: string;
   propertyId: string;
-  status: 'active' | 'inactive' | 'cancelled';
+  status: 'active' | 'cancelled' | 'pending';
   startDate: string;
   nextBillingDate: string;
   monthlyPrice: number;
-  blueprint?: MyHomeBlueprint;
-  currentScore?: MyHomeScore;
   visits: HudsonVisit[];
   snapshotInspections: SnapshotInspection[];
   hasCompletedSnapshot: boolean;
+  currentScore: MyHomeScore;
+  blueprint?: MyHomeBlueprint;
   personalDirector: {
     name: string;
     phone: string;
     email: string;
-    photo?: string;
+    photo: string;
   };
 }

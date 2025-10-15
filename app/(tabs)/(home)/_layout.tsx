@@ -21,7 +21,7 @@ export default function HomeLayout() {
         headerTitleStyle: { 
           fontSize: 18,
           fontWeight: '700',
-          letterSpacing: -0.3,
+          letterSpacing : -0.3,
         },
         headerTitleAlign: 'left',
         headerLeftContainerStyle: {
@@ -48,6 +48,14 @@ export default function HomeLayout() {
             </TouchableOpacity>
           ),
         }} 
+      />
+      <Stack.Screen 
+        name="appointments-list"
+        options={{ 
+          title: "Appointments",
+          headerStyle: { backgroundColor: COLORS.teal },
+          headerTintColor: 'white',
+        }}
       />
     </Stack>
   );

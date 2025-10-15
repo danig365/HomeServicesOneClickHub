@@ -42,7 +42,7 @@ export default function VaultScreen() {
     getExpiringDocuments,
     searchDocuments 
   } = useVault();
-  const { selectedPropertyId } = useProperties();
+  const { selectedproperty_id } = useProperties();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'important' | 'expiring'>('all');
@@ -50,13 +50,13 @@ export default function VaultScreen() {
   const filteredDocuments = useMemo(() => {
     let docs = documents;
     
-    if (selectedPropertyId) {
-      docs = docs.filter(doc => doc.propertyId === selectedPropertyId);
+    if (selectedproperty_id) {
+      docs = docs.filter(doc => doc.property_id === selectedproperty_id);
     }
     
     if (searchQuery.trim()) {
       docs = searchDocuments(searchQuery).filter(doc => 
-        !selectedPropertyId || doc.propertyId === selectedPropertyId
+        !selectedproperty_id || doc.property_id === selectedproperty_id
       );
     }
     
@@ -74,33 +74,33 @@ export default function VaultScreen() {
       default:
         return docs;
     }
-  }, [documents, searchQuery, selectedFilter, searchDocuments, selectedPropertyId]);
+  }, [documents, searchQuery, selectedFilter, searchDocuments, selectedproperty_id]);
 
   const categoryStats = useMemo(() => {
     const stats: Record<DocumentCategory, number> = {} as Record<DocumentCategory, number>;
     Object.keys(categoryConfig).forEach(category => {
       const categoryDocs = getDocumentsByCategory(category as DocumentCategory);
-      const filtered = selectedPropertyId 
-        ? categoryDocs.filter(doc => doc.propertyId === selectedPropertyId)
+      const filtered = selectedproperty_id 
+        ? categoryDocs.filter(doc => doc.property_id === selectedproperty_id)
         : categoryDocs;
       stats[category as DocumentCategory] = filtered.length;
     });
     return stats;
-  }, [getDocumentsByCategory, selectedPropertyId]);
+  }, [getDocumentsByCategory, selectedproperty_id]);
 
   const importantCount = useMemo(() => {
     const docs = getImportantDocuments();
-    return selectedPropertyId 
-      ? docs.filter(doc => doc.propertyId === selectedPropertyId).length
+    return selectedproperty_id 
+      ? docs.filter(doc => doc.property_id === selectedproperty_id).length
       : docs.length;
-  }, [getImportantDocuments, selectedPropertyId]);
+  }, [getImportantDocuments, selectedproperty_id]);
   
   const expiringCount = useMemo(() => {
     const docs = getExpiringDocuments();
-    return selectedPropertyId 
-      ? docs.filter(doc => doc.propertyId === selectedPropertyId).length
+    return selectedproperty_id 
+      ? docs.filter(doc => doc.property_id === selectedproperty_id).length
       : docs.length;
-  }, [getExpiringDocuments, selectedPropertyId]);
+  }, [getExpiringDocuments, selectedproperty_id]);
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>

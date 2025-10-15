@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,12 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Image
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/auth-store';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Lock, Mail, Wifi, WifiOff } from 'lucide-react-native';
-import { Image } from 'react-native';
-import Constants from 'expo-constants';
+import { Lock, Mail } from 'lucide-react-native';
 
 const TEAL = '#0D3135';
 const CREAM = '#FFF8E7';
@@ -25,121 +24,39 @@ const ACCENT = '#4A7D83';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, error, clearError, isLoading, setDemoMode } = useAuth();
+  const { login, error, clearError, isLoading, setDemoMode, profile } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
-  const [backendUrl, setBackendUrl] = useState<string>('');
   const [localError, setLocalError] = useState<string | null>(null);
 
-  const getBaseUrl = () => {
-    if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
-      return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
-    }
-
-    if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined') {
-        return window.location.origin;
-      }
-      return "http://localhost:8081";
-    }
-
-    const debuggerHost = Constants.expoConfig?.hostUri;
-    if (debuggerHost) {
-      console.log('[Login] Raw hostUri:', debuggerHost);
-      
-      if (debuggerHost.includes('.e2b.app')) {
-        const host = debuggerHost.split(':')[0];
-        const url = `https://${host}`;
-        console.log('[Login] E2B environment detected, using URL:', url);
-        return url;
-      }
-      
-      if (debuggerHost.includes('.rork.live')) {
-        const host = debuggerHost.split(':')[0];
-        const url = `https://${host}`;
-        console.log('[Login] Rork.live tunnel detected, using URL:', url);
-        return url;
-      }
-      
-      if (debuggerHost.includes('tunnel.dev') || debuggerHost.includes('ngrok') || debuggerHost.includes('.trycloudflare.com')) {
-        const host = debuggerHost.split(':')[0];
-        return `https://${host}`;
-      }
-      
-      const host = debuggerHost.split(':')[0];
-      return `http://${host}:8081`;
-    }
-
-    return "http://localhost:8081";
-  };
-
-  const checkBackendConnection = useCallback(async () => {
-    const baseUrl = getBaseUrl();
-    setBackendUrl(baseUrl);
-    console.log('[Login] Checking backend connection at:', baseUrl);
-    console.log('[Login] Platform:', Platform.OS);
-    console.log('[Login] EXPO_PUBLIC_RORK_API_BASE_URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
-    
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        console.log('[Login] Backend check timeout after 8s');
-        controller.abort();
-      }, 8000);
-      
-      const response = await fetch(`${baseUrl}/api`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-      console.log('[Login] Backend response status:', response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('[Login] Backend response:', data);
-        setBackendStatus('online');
-      } else {
-        console.error('[Login] Backend returned error status:', response.status);
-        setBackendStatus('offline');
-      }
-    } catch (err) {
-      console.error('[Login] Backend connection failed:', err);
-      if (err instanceof Error) {
-        console.error('[Login] Error name:', err.name);
-        console.error('[Login] Error message:', err.message);
-        console.error('[Login] Error stack:', err.stack);
-      }
-      setBackendStatus('offline');
-    }
-  }, []);
-
+  // Role-based navigation after login
   useEffect(() => {
-    checkBackendConnection();
-  }, [checkBackendConnection]);
+    if (profile && !isLoading) {
+      console.log('[Login] Profile loaded, navigating based on role:', profile.role);
+      switch (profile.role) {
+        case 'admin':
+          router.replace('/admin-portal');
+          break;
+        case 'tech':
+          router.replace('/tech-portal');
+          break;
+        case 'homeowner':
+          router.replace('/(tabs)/(home)');
+          break;
+        default:
+          router.replace('/(tabs)/(home)');
+      }
+    }
+  }, [profile, isLoading, router]);
 
   const handleLogin = async () => {
     clearError();
-    console.log('[Login] Starting login process');
+    setLocalError(null);
+    console.log('[Login] Starting login process with Supabase');
     const success = await login({ email, password });
     console.log('[Login] Login result:', success);
     if (success) {
-      console.log('[Login] Login successful, navigation should happen automatically');
-    }
-  };
-
-  const handleBypassLogin = async () => {
-    clearError();
-    console.log('[Login] Bypassing enrollment with test account');
-    setEmail('homeowner@hudson.com');
-    setPassword('home123');
-    const success = await login({ email: 'homeowner@hudson.com', password: 'home123' });
-    if (success) {
-      console.log('[Login] Bypass login successful');
+      console.log('[Login] Login successful, navigation will happen automatically');
     }
   };
 
@@ -153,7 +70,6 @@ export default function LoginScreen() {
       name: 'Demo User',
       phone: '555-0100',
       role: 'homeowner' as const,
-      createdAt: new Date().toISOString(),
     };
     const demoToken = 'demo-token-' + Date.now();
     
@@ -176,7 +92,6 @@ export default function LoginScreen() {
       name: 'Demo Technician',
       phone: '555-0200',
       role: 'tech' as const,
-      createdAt: new Date().toISOString(),
     };
     const demoToken = 'demo-tech-token-' + Date.now();
     
@@ -202,7 +117,6 @@ export default function LoginScreen() {
       name: 'Demo Administrator',
       phone: '555-0300',
       role: 'admin' as const,
-      createdAt: new Date().toISOString(),
     };
     const demoToken = 'demo-admin-token-' + Date.now();
     
@@ -240,54 +154,6 @@ export default function LoginScreen() {
           <View style={styles.formContainer}>
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>Sign in to continue</Text>
-
-            <View style={[
-              styles.statusContainer,
-              backendStatus === 'online' ? styles.statusOnline : 
-              backendStatus === 'offline' ? styles.statusOffline : 
-              styles.statusChecking
-            ]}>
-              {backendStatus === 'checking' ? (
-                <ActivityIndicator size="small" color={TEAL} />
-              ) : backendStatus === 'online' ? (
-                <Wifi size={16} color={ACCENT} />
-              ) : (
-                <WifiOff size={16} color="#EF4444" />
-              )}
-              <Text style={styles.statusText}>
-                {backendStatus === 'checking' ? 'Checking server...' :
-                 backendStatus === 'online' ? 'Server connected' :
-                 'Server offline'}
-              </Text>
-            </View>
-
-            {backendStatus === 'offline' && (
-              <View style={styles.warningContainer}>
-                <Text style={styles.warningTitle}>Backend Server Offline</Text>
-                <Text style={styles.warningText}>
-                  Cannot connect to: {backendUrl}/api
-                </Text>
-                <Text style={styles.warningText}>
-                  Platform: {Platform.OS}
-                </Text>
-                {Platform.OS !== 'web' && (
-                  <Text style={styles.warningText}>
-                    Host URI: {Constants.expoConfig?.hostUri || 'Not available'}
-                  </Text>
-                )}
-                <Text style={styles.warningHint}>
-                  {Platform.OS === 'web' 
-                    ? 'Make sure the backend server is running on this machine.'
-                    : 'For mobile: The backend must be accessible from your device. If using a physical device, ensure both are on the same WiFi network.'}
-                </Text>
-                <TouchableOpacity 
-                  style={styles.retryButton}
-                  onPress={checkBackendConnection}
-                >
-                  <Text style={styles.retryButtonText}>Retry Connection</Text>
-                </TouchableOpacity>
-              </View>
-            )}
 
             {(error || localError) ? (
               <View style={styles.errorContainer}>
@@ -359,7 +225,7 @@ export default function LoginScreen() {
               onPress={handleDemoMode}
               disabled={isLoading}
             >
-              <Text style={styles.demoButtonText}>🎮 Homeowner Demo (No Backend)</Text>
+              <Text style={styles.demoButtonText}>🎮 Homeowner Demo</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -367,7 +233,7 @@ export default function LoginScreen() {
               onPress={handleTechDemoMode}
               disabled={isLoading}
             >
-              <Text style={styles.techDemoButtonText}>🔧 Tech Portal Demo (No Backend)</Text>
+              <Text style={styles.techDemoButtonText}>🔧 Tech Portal Demo</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -375,24 +241,13 @@ export default function LoginScreen() {
               onPress={handleAdminDemoMode}
               disabled={isLoading}
             >
-              <Text style={styles.adminDemoButtonText}>👑 Admin Portal Demo (No Backend)</Text>
+              <Text style={styles.adminDemoButtonText}>👑 Admin Portal Demo</Text>
             </TouchableOpacity>
 
-            {backendStatus === 'online' && (
-              <TouchableOpacity
-                style={styles.bypassButton}
-                onPress={handleBypassLogin}
-                disabled={isLoading}
-              >
-                <Text style={styles.bypassButtonText}>🚀 Quick Start with Test Account</Text>
-              </TouchableOpacity>
-            )}
-
             <View style={styles.demoContainer}>
-              <Text style={styles.demoTitle}>Demo Accounts:</Text>
-              <Text style={styles.demoText}>Admin: admin@hudson.com / admin123</Text>
-              <Text style={styles.demoText}>Tech: tech@hudson.com / tech123</Text>
-              <Text style={styles.demoText}>Homeowner: homeowner@hudson.com / home123</Text>
+              <Text style={styles.demoTitle}>Demo Accounts (Supabase):</Text>
+              <Text style={styles.demoText}>Create an account via Sign Up</Text>
+              <Text style={styles.demoText}>Or use demo mode buttons above</Text>
             </View>
           </View>
         </ScrollView>
@@ -440,7 +295,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: '700' as const,
+    fontWeight: '700',
     color: '#1F2937',
     marginBottom: 8,
   },
@@ -458,62 +313,6 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#DC2626',
     fontSize: 14,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    gap: 8,
-  },
-  statusChecking: {
-    backgroundColor: '#F3F4F6',
-  },
-  statusOnline: {
-    backgroundColor: '#D1FAE5',
-  },
-  statusOffline: {
-    backgroundColor: '#FEE2E2',
-  },
-  statusText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-  },
-  warningContainer: {
-    backgroundColor: '#FEF3C7',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  warningTitle: {
-    color: '#92400E',
-    fontSize: 14,
-    fontWeight: '700' as const,
-    marginBottom: 8,
-  },
-  warningText: {
-    color: '#92400E',
-    fontSize: 11,
-    marginBottom: 4,
-  },
-  warningHint: {
-    color: '#92400E',
-    fontSize: 10,
-    marginTop: 8,
-    marginBottom: 8,
-    fontStyle: 'italic' as const,
-  },
-  retryButton: {
-    backgroundColor: '#F59E0B',
-    padding: 8,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  retryButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600' as const,
   },
   inputContainer: {
     gap: 16,
@@ -544,7 +343,7 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     color: ACCENT,
     fontSize: 14,
-    fontWeight: '600' as const,
+    fontWeight: '600',
   },
   loginButton: {
     backgroundColor: TEAL,
@@ -560,12 +359,13 @@ const styles = StyleSheet.create({
   loginButtonText: {
     color: CREAM,
     fontSize: 18,
-    fontWeight: '700' as const,
+    fontWeight: '700',
   },
   signupContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 24,
   },
   signupText: {
     color: '#6B7280',
@@ -574,39 +374,7 @@ const styles = StyleSheet.create({
   signupLink: {
     color: ACCENT,
     fontSize: 14,
-    fontWeight: '700' as const,
-  },
-  demoContainer: {
-    marginTop: 24,
-    padding: 16,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-  },
-  demoTitle: {
-    fontSize: 14,
-    fontWeight: '700' as const,
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  demoText: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  bypassButton: {
-    backgroundColor: '#8B5CF6',
-    height: 56,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#7C3AED',
-  },
-  bypassButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '700' as const,
+    fontWeight: '700',
   },
   demoButton: {
     backgroundColor: ACCENT,
@@ -621,7 +389,7 @@ const styles = StyleSheet.create({
   demoButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '700' as const,
+    fontWeight: '700',
   },
   techDemoButton: {
     backgroundColor: GOLD,
@@ -629,14 +397,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
     borderWidth: 2,
     borderColor: '#8B7660',
   },
   techDemoButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '700' as const,
+    fontWeight: '700',
   },
   adminDemoButton: {
     backgroundColor: '#DC2626',
@@ -651,6 +419,23 @@ const styles = StyleSheet.create({
   adminDemoButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '700' as const,
+    fontWeight: '700',
+  },
+  demoContainer: {
+    marginTop: 8,
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+  },
+  demoTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  demoText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
   },
 });

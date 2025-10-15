@@ -14,9 +14,9 @@ import { AuthProvider, useAuth } from "@/hooks/auth-store";
 import { UserRequestsProvider } from "@/hooks/user-requests-store";
 import { ActivityIndicator, View, StyleSheet } from "react-native";
 import { trpc, trpcReactClient } from "@/lib/trpc";
-
-const TEAL = '#0D3135';
-const CREAM = '#FFF8E7';
+import { AppointmentsProvider } from '@/hooks/appointments-store';
+const TEAL = "#0D3135";
+const CREAM = "#FFF8E7";
 
 const queryClient = new QueryClient();
 
@@ -24,20 +24,32 @@ function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
-
+  const { initialize } = useAuth();
+useEffect(() => {
+  initialize();
+}, [initialize]);
   useEffect(() => {
     if (isLoading) return;
 
-    const inPublicRoute = segments[0] === 'login' || segments[0] === 'signup' || segments[0] === 'forgot-password';
+    const inPublicRoute =
+      segments[0] === "login" ||
+      segments[0] === "signup" ||
+      segments[0] === "forgot-password";
 
-    console.log('[RootLayoutNav] Auth state:', { isAuthenticated, isLoading, segments: segments.join('/') });
+    console.log("[RootLayoutNav] Auth state:", {
+      isAuthenticated,
+      isLoading,
+      segments: segments.join("/"),
+    });
 
     if (!isAuthenticated && !inPublicRoute) {
-      console.log('[RootLayoutNav] Not authenticated, redirecting to login');
-      router.replace('/login');
+      console.log("[RootLayoutNav] Not authenticated, redirecting to login");
+      router.replace("/login");
     } else if (isAuthenticated && inPublicRoute) {
-      console.log('[RootLayoutNav] Authenticated in public route, redirecting to home');
-      router.replace('/(tabs)/(home)');
+      console.log(
+        "[RootLayoutNav] Authenticated in public route, redirecting to home"
+      );
+      router.replace("/(tabs)/(home)");
     }
   }, [isAuthenticated, segments, isLoading, router]);
 
@@ -50,119 +62,121 @@ function RootLayoutNav() {
   }
 
   return (
-    <Stack screenOptions={{ 
-      headerBackTitle: "Back",
-      headerStyle: { 
-        backgroundColor: TEAL,
-      },
-      headerTintColor: CREAM,
-      headerTitleStyle: { 
-        fontWeight: '700',
-        fontSize: 18,
-      },
-    }}>
+    <Stack
+      screenOptions={{
+        headerBackTitle: "Back",
+        headerStyle: {
+          backgroundColor: TEAL,
+        },
+        headerTintColor: CREAM,
+        headerTitleStyle: {
+          fontWeight: "700",
+          fontSize: 18,
+        },
+      }}
+    >
       <Stack.Screen name="login" options={{ headerShown: false }} />
       <Stack.Screen name="signup" options={{ headerShown: false }} />
       <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen 
-        name="service/[id]" 
-        options={{ 
+      <Stack.Screen
+        name="service/[id]"
+        options={{
           title: "Service Details",
           presentation: "modal",
-        }} 
+        }}
       />
-      <Stack.Screen 
-        name="cart" 
-        options={{ 
+      <Stack.Screen
+        name="cart"
+        options={{
           title: "Your Cart",
           presentation: "modal",
-        }} 
+        }}
       />
-      <Stack.Screen 
-        name="checkout" 
-        options={{ 
+      <Stack.Screen
+        name="checkout"
+        options={{
           title: "Checkout",
-        }} 
+        }}
       />
-      <Stack.Screen 
-        name="document/[id]" 
-        options={{ 
+      <Stack.Screen
+        name="document/[id]"
+        options={{
           title: "Document",
-        }} 
+        }}
       />
-      <Stack.Screen 
-        name="document/add" 
-        options={{ 
+      <Stack.Screen
+        name="document/add"
+        options={{
           title: "Add Document",
-        }} 
+        }}
       />
-      <Stack.Screen 
-        name="properties" 
-        options={{ 
+      <Stack.Screen
+        name="properties"
+        options={{
           title: "My Properties",
-        }} 
+        }}
       />
-      <Stack.Screen 
-        name="blueprint" 
-        options={{ 
+      <Stack.Screen
+        name="blueprint"
+        options={{
           title: "MyHome Blueprint",
-        }} 
+        }}
       />
-      <Stack.Screen 
-        name="tech-portal" 
-        options={{ 
+      <Stack.Screen
+        name="tech-portal"
+        options={{
           title: "Tech Portal",
-        }} 
+        }}
       />
-      <Stack.Screen 
-        name="tech-properties-view" 
-        options={{ 
+      <Stack.Screen
+        name="tech-properties-view"
+        options={{
           title: "Properties",
-        }} 
+        }}
       />
-      <Stack.Screen 
-        name="quickstart-snapshot" 
-        options={{ 
+      <Stack.Screen
+        name="quickstart-snapshot"
+        options={{
           title: "QuickStart Snapshot",
-        }} 
+        }}
       />
-      <Stack.Screen 
-        name="referral-card" 
-        options={{ 
+      <Stack.Screen
+        name="referral-card"
+        options={{
           title: "Referral Card",
           presentation: "modal",
-        }} 
+        }}
       />
-      <Stack.Screen 
-        name="snapshot-inspection/[id]" 
-        options={{ 
+      <Stack.Screen
+        name="snapshot-inspection/[id]"
+        options={{
           title: "Snapshot Inspection",
-        }} 
+        }}
       />
-      <Stack.Screen 
-        name="property-reminders" 
-        options={{ 
+      <Stack.Screen
+        name="property-reminders"
+        options={{
           title: "Property Reminders",
-        }} 
+        }}
       />
-      <Stack.Screen 
-        name="appointment/[id]" 
-        options={{ 
+      <Stack.Screen
+        name="appointment/[id]"
+        options={{
           title: "Appointment Details",
-        }} 
+        }}
       />
-      <Stack.Screen 
-        name="admin-dashboard" 
-        options={{ 
+      <Stack.Screen
+        name="admin-dashboard"
+        options={{
           title: "Admin Dashboard",
-        }} 
+        }}
       />
-      <Stack.Screen 
-        name="admin-portal" 
-        options={{ 
+      <Stack.Screen
+        name="admin-portal"
+        options={{
           title: "Admin Portal",
-        }} 
+        }}
       />
     </Stack>
   );
@@ -171,8 +185,8 @@ function RootLayoutNav() {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     backgroundColor: CREAM,
   },
 });
@@ -191,9 +205,11 @@ export default function RootLayout() {
                       <SnapshotProvider>
                         <CartProvider>
                           <BookingsProvider>
+                             <AppointmentsProvider>
                             <VaultProvider>
                               <RootLayoutNav />
                             </VaultProvider>
+                            </AppointmentsProvider>
                           </BookingsProvider>
                         </CartProvider>
                       </SnapshotProvider>
