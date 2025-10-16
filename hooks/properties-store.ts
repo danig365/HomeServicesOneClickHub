@@ -2,7 +2,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { 
+import {
   PropertyInput,
   PropertyInsightInput,
   PropertyReminderInput,
@@ -10,6 +10,7 @@ import {
   toLegacyProperty,
   toDbPropertyInput
 } from '@/types/property';
+import { useAuth } from '@/hooks/auth-store';
 
 const SELECTED_PROPERTY_KEY = 'selected_property_id';
 
@@ -18,70 +19,98 @@ export const [PropertiesProvider, useProperties] = createContextHook(() => {
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const { user } = useAuth();
 
   // Initialize and get current user
   useEffect(() => {
-    const initializeUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUserId(user.id);
-      }
-    };
-    initializeUser();
-  }, []);
+    if (user) {
+      setUserId(user.id);
+    }
+  }, [user]);
 
+  // Get assigned techs for a property
+  // Get assigned techs for a property (alternative approach)
+  const getAssignedTechs = useCallback(async (propertyId: string) => {
+    try {
+      // First get tech IDs
+      const { data: assignments, error: assignError } = await supabase
+        .from('tech_assignments')
+        .select('tech_id, assigned_date')
+        .eq('property_id', propertyId)
+        .eq('status', 'active');
+
+      if (assignError) throw assignError;
+      if (!assignments || assignments.length === 0) return [];
+
+      // Then get tech profiles
+      const techIds = assignments.map(a => a.tech_id);
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, role')
+        .in('id', techIds);
+
+      if (profileError) throw profileError;
+
+      // Combine data
+      return (profiles || []).map(profile => {
+        const assignment = assignments.find(a => a.tech_id === profile.id);
+        return {
+          id: profile.id,
+          name: profile.full_name || '',
+          email: profile.email,
+          role: profile.role,
+          assignedDate: assignment?.assigned_date || '',
+        };
+      });
+    } catch (error) {
+      console.error('Failed to get assigned techs:', error);
+      return [];
+    }
+  }, []);
   // Load properties from Supabase
   const loadProperties = useCallback(async () => {
-    if (!userId) return;
-
+    if (!userId || !user?.role) {
+      console.log('[Properties] No user or role, clearing properties');
+      setProperties([]);
+      return;
+    }
+    
     try {
       setIsLoading(true);
-      console.log('[Properties] Loading properties for user:', userId);
-
-      // Fetch properties with full data
-      const { data: propertiesData, error: propertiesError } = await supabase
+      console.log('[Properties] Loading properties for:', { userId, role: user.role });
+      
+      let query = supabase
         .from('properties')
         .select(`
           *,
           blueprints (*),
           property_insights (*),
-          property_reminders (*)
-        `)
-        .eq('user_id', userId)
-        .order('is_primary', { ascending: false })
-        .order('created_at', { ascending: false });
+          property_reminders (*),
+          tech_assignments (*)
+        `);
 
-      if (propertiesError) throw propertiesError;
-
-      // Transform and set properties
-      const legacyProperties = propertiesData?.map(prop => {
-        const propInsights = prop.property_insights || [];
-        const propReminders = prop.property_reminders || [];
-        return toLegacyProperty(prop, propInsights, propReminders);
-      }) || [];
-
-      setProperties(legacyProperties);
-
-      // Handle property selection
-      const storedSelectedId = await AsyncStorage.getItem(SELECTED_PROPERTY_KEY);
-      if (storedSelectedId && legacyProperties.some(p => p.id === storedSelectedId)) {
-        setSelectedPropertyId(storedSelectedId);
-      } else {
-        const primary = legacyProperties.find(p => p.isPrimary);
-        const selected = primary?.id || legacyProperties[0]?.id || null;
-        setSelectedPropertyId(selected);
-        if (selected) {
-          await AsyncStorage.setItem(SELECTED_PROPERTY_KEY, selected);
-        }
+      // Log the SQL query being executed
+      const { data, error, count } = await query;
+      
+      if (error) {
+        console.error('[Properties] Error:', error.message);
+        throw error;
       }
 
-      console.log('[Properties] Loaded', legacyProperties.length, 'properties');
+      console.log('[Properties] Loaded', count, 'properties');
+      setProperties(data?.map(prop => {
+        const insights = prop.property_insights || [];
+        const reminders = prop.property_reminders || [];
+        return toLegacyProperty(prop, insights, reminders);
+      }) || []);
+
     } catch (error) {
-      console.error('[Properties] Error loading properties:', error);
+      console.error('[Properties] Failed to load:', error);
+      setProperties([]);
     } finally {
       setIsLoading(false);
     }
-  }, [userId]);
+  }, [userId, user?.role]);
 
   useEffect(() => {
     if (userId) {
@@ -143,10 +172,10 @@ export const [PropertiesProvider, useProperties] = createContextHook(() => {
       if (propertyError) throw propertyError;
 
       const newProperty = toLegacyProperty(propertyData, [], []);
-      
+
       // Update local state
       setProperties(prev => [...prev, newProperty]);
-      
+
       // If this is the first property or set as primary, select it
       if (shouldBePrimary || property.isPrimary) {
         await selectProperty(newProperty.id);
@@ -154,7 +183,7 @@ export const [PropertiesProvider, useProperties] = createContextHook(() => {
 
       // Trigger a refresh to ensure all related data is loaded
       await loadProperties();
-      
+
       return newProperty;
     } catch (error) {
       console.error('Failed to add property:', error);
@@ -212,12 +241,12 @@ export const [PropertiesProvider, useProperties] = createContextHook(() => {
 
       setProperties(prev => {
         const updated = prev.filter(p => p.id !== id);
-        
+
         // If no primary property, set first as primary
         if (updated.length > 0 && !updated.some(p => p.isPrimary)) {
           updateProperty(updated[0].id, { isPrimary: true });
         }
-        
+
         return updated;
       });
 
@@ -463,6 +492,7 @@ export const [PropertiesProvider, useProperties] = createContextHook(() => {
     getUpcomingReminders,
     getOverdueReminders,
     refreshProperties: loadProperties,
+    getAssignedTechs, // Add this
   }), [
     properties,
     selectedPropertyId,
@@ -483,5 +513,6 @@ export const [PropertiesProvider, useProperties] = createContextHook(() => {
     getUpcomingReminders,
     getOverdueReminders,
     loadProperties,
+    getAssignedTechs, // Add this
   ]);
 });

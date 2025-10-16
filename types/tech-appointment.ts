@@ -69,17 +69,10 @@ export interface TechAppointment {
   id: string;
   propertyId: string;
   techId: string;
-  type: AppointmentType;
-  status: AppointmentStatus;
+  type: 'snapshot' | 'maintenance';
+  status: 'upcoming' | 'in-progress' | 'completed' | 'cancelled';
   scheduledDate: string;
-  startedAt?: string;
   completedAt?: string;
-  tasks: MaintenanceTask[];
-  notes: string;
-  images: MediaNote[];
-  audioNotes: MediaNote[];
-  snapshotInspection?: SnapshotInspection;
-  userRequests?: string[];
 }
 
 // ADD: Database types for Supabase

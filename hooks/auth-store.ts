@@ -1,6 +1,6 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { User, UserRole } from '@/types/user';
 import { supabase, supabaseAdmin } from '@/lib/supabase';
 import { Session, AuthError } from '@supabase/supabase-js';
@@ -18,7 +18,7 @@ interface AuthCredentials {
 interface SignupData extends AuthCredentials {
   name: string;
   phone: string;
-  role?: UserRole,
+  role?: UserRole;
   redirectTo?: string;
 }
 
@@ -37,6 +37,89 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Load current user - defined early so it can be used by other functions
+  const loadCurrentUser = useCallback(async () => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      if (!authUser) {
+        setUser(null);
+        return;
+      }
+
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+
+      if (profileError) throw profileError;
+
+      // Get assigned properties if user is a tech
+      let assignedProperties: string[] = [];
+      if (profileData.role === 'tech') {
+        const { data: techAssignments } = await supabase
+          .from('tech_assignments')
+          .select('property_id')
+          .eq('tech_id', authUser.id)
+          .eq('status', 'active');
+        
+        assignedProperties = techAssignments?.map(ta => ta.property_id) || [];
+      }
+
+      setUser({
+        id: profileData.id,
+        name: profileData.full_name || '',
+        email: profileData.email,
+        phone: '',
+        role: profileData.role,
+        assignedProperties,
+      });
+      
+      setProfile(profileData);
+    } catch (error) {
+      console.error('[Auth] Failed to load current user:', error);
+      setUser(null);
+    }
+  }, []);
+
+  // Load all techs with their assignments
+  const loadTechs = useCallback(async () => {
+    try {
+      const { data: techProfiles, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', 'tech')
+        .order('full_name');
+
+      if (error) throw error;
+
+      // Get all tech assignments
+      const { data: allAssignments } = await supabase
+        .from('tech_assignments')
+        .select('tech_id, property_id, status')
+        .eq('status', 'active');
+
+      const techsWithAssignments: User[] = (techProfiles || []).map(profile => {
+        const techAssignments = allAssignments?.filter(a => a.tech_id === profile.id) || [];
+        
+        return {
+          id: profile.id,
+          name: profile.full_name || '',
+          email: profile.email,
+          phone: '',
+          role: profile.role as UserRole,
+          assignedProperties: techAssignments.map(a => a.property_id),
+        };
+      });
+
+      return techsWithAssignments;
+    } catch (error) {
+      console.error('[Auth] Failed to load techs:', error);
+      return [];
+    }
+  }, []);
+
   const fetchProfile = useCallback(async () => {
     const currentSession = session;
     if (!currentSession?.user) return;
@@ -51,6 +134,18 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       if (error) throw error;
       setProfile(data);
 
+      // Get assigned properties if user is a tech
+      let assignedProperties: string[] = [];
+      if (data.role === 'tech') {
+        const { data: techAssignments } = await supabase
+          .from('tech_assignments')
+          .select('property_id')
+          .eq('tech_id', currentSession.user.id)
+          .eq('status', 'active');
+        
+        assignedProperties = techAssignments?.map(ta => ta.property_id) || [];
+      }
+
       // Also update the user state to match the profile
       setUser({
         id: data.id,
@@ -58,10 +153,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         name: data.full_name || '',
         phone: '',
         role: data.role,
-
+        assignedProperties,
       });
     } catch (err) {
-      console.error('Error fetching profile:', err);
+      console.error('[Auth] Error fetching profile:', err);
     }
   }, [session]);
 
@@ -88,12 +183,26 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           console.error('[Auth] Error fetching profile:', profileError);
         } else {
           setProfile(profileData);
+          
+          // Get assigned properties if user is a tech
+          let assignedProperties: string[] = [];
+          if (profileData.role === 'tech') {
+            const { data: techAssignments } = await supabase
+              .from('tech_assignments')
+              .select('property_id')
+              .eq('tech_id', currentSession.user.id)
+              .eq('status', 'active');
+            
+            assignedProperties = techAssignments?.map(ta => ta.property_id) || [];
+          }
+          
           setUser({
             id: profileData.id,
             email: profileData.email,
             name: profileData.full_name || '',
             phone: '',
             role: profileData.role,
+            assignedProperties,
           });
         }
       } else {
@@ -116,13 +225,26 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
           if (profileData) {
             setProfile(profileData);
+            
+            // Get assigned properties if user is a tech
+            let assignedProperties: string[] = [];
+            if (profileData.role === 'tech') {
+              const { data: techAssignments } = await supabase
+                .from('tech_assignments')
+                .select('property_id')
+                .eq('tech_id', newSession.user.id)
+                .eq('status', 'active');
+              
+              assignedProperties = techAssignments?.map(ta => ta.property_id) || [];
+            }
+            
             setUser({
               id: profileData.id,
               email: profileData.email,
               name: profileData.full_name || '',
               phone: '',
               role: profileData.role,
-
+              assignedProperties,
             });
           }
         } else {
@@ -136,6 +258,11 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       setIsLoading(false);
     }
   }, []);
+
+  // Initialize on mount
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
 
   const login = useCallback(async (credentials: AuthCredentials): Promise<boolean> => {
     setError(null);
@@ -165,13 +292,26 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       if (profileError) throw profileError;
 
       setProfile(profileData);
+      
+      // Get assigned properties if user is a tech
+      let assignedProperties: string[] = [];
+      if (profileData.role === 'tech') {
+        const { data: techAssignments } = await supabase
+          .from('tech_assignments')
+          .select('property_id')
+          .eq('tech_id', data.user.id)
+          .eq('status', 'active');
+        
+        assignedProperties = techAssignments?.map(ta => ta.property_id) || [];
+      }
+      
       setUser({
         id: profileData.id,
         email: profileData.email,
         name: profileData.full_name || '',
         phone: '',
         role: profileData.role,
-
+        assignedProperties,
       });
 
       setIsLoading(false);
@@ -208,19 +348,19 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     try {
       console.log('[Auth] Attempting Supabase signup for:', data.email);
 
-      // ✅ Create redirect URL dynamically
+      // Create redirect URL dynamically
       const redirectTo =
         Constants?.expoConfig?.extra?.supabaseRedirectUrl ||
-        Linking.createURL('/auth/callback'); // fallback for safety
+        Linking.createURL('/auth/callback');
 
       console.log('[Auth] Using redirect URL:', redirectTo);
 
-      // ✅ Include `emailRedirectTo` in Supabase signup
+      // Include emailRedirectTo in Supabase signup
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
-          emailRedirectTo: redirectTo, // <-- Key addition
+          emailRedirectTo: redirectTo,
           data: {
             full_name: data.name,
             role: data.role || 'homeowner',
@@ -289,13 +429,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     }
   }, []);
 
-
   const logout = useCallback(async () => {
     try {
       console.log('[Auth] Logging out...');
       await supabase.auth.signOut();
 
-      // Also clear AsyncStorage for backward compatibility
+      // Clear AsyncStorage for backward compatibility
       await Promise.all([
         AsyncStorage.removeItem(AUTH_TOKEN_KEY),
         AsyncStorage.removeItem(AUTH_USER_KEY),
@@ -307,7 +446,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       setProfile(null);
       console.log('[Auth] Logout complete');
     } catch (err) {
-      console.error('Logout error:', err);
+      console.error('[Auth] Logout error:', err);
     }
   }, []);
 
@@ -322,26 +461,46 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       if (error) throw error;
       return true;
     } catch (err) {
-      console.error('Reset password error:', err);
+      console.error('[Auth] Reset password error:', err);
       setError('An error occurred');
       return false;
     }
   }, []);
 
-  const getAllUsers = useCallback(async () => {
+  const getAllUsers = useCallback(async (): Promise<User[]> => {
     try {
-      const { data, error } = await supabase
+      const { data: profiles, error } = await supabase
         .from('profiles')
-        .select('*');
+        .select('*')
+        .order('full_name');
 
       if (error) {
-        console.error('Supabase getAllUsers error:', error);
+        console.error('[Auth] Supabase getAllUsers error:', error);
         return [];
       }
 
-      return data || [];
+      // Get all tech assignments
+      const { data: allAssignments } = await supabase
+        .from('tech_assignments')
+        .select('tech_id, property_id, status')
+        .eq('status', 'active');
+
+      const users: User[] = (profiles || []).map(profile => {
+        const techAssignments = allAssignments?.filter(a => a.tech_id === profile.id) || [];
+        
+        return {
+          id: profile.id,
+          name: profile.full_name || '',
+          email: profile.email,
+          phone: '',
+          role: profile.role as UserRole,
+          assignedProperties: techAssignments.map(a => a.property_id),
+        };
+      });
+
+      return users;
     } catch (err) {
-      console.error('Get all users error:', err);
+      console.error('[Auth] Get all users error:', err);
       return [];
     }
   }, []);
@@ -369,10 +528,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       }
 
       // Delete user using admin client
-      const { error: authDeleteError } = await supabaseAdmin
-        .auth
-        .admin
-        .deleteUser(userId);
+      const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
       if (authDeleteError) {
         console.error('[Auth] Supabase deleteUser error:', authDeleteError);
@@ -452,16 +608,16 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         console.error('[Auth] Verification error:', verifyError);
         return false;
       }
-
+      
       console.log('[Auth] Role successfully updated from', existingUser.role, 'to', updatedUser.role);
-
+      
       // Update local state if it's the current user
       if (user?.id === userId) {
         setUser(prev => prev ? { ...prev, role: newRole } : null);
         setProfile(prev => prev ? { ...prev, role: newRole } : null);
         console.log('[Auth] Local state updated for current user');
       }
-
+      
       return true;
     } catch (err) {
       console.error('[Auth] Update user role error:', err);
@@ -495,6 +651,110 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     }
   }, []);
 
+  const assignTechToProperty = useCallback(async (techId: string, propertyId: string): Promise<boolean> => {
+    try {
+      console.log('[Auth] Assigning tech', techId, 'to property', propertyId);
+      
+      // Check if assignment already exists
+      const { data: existing, error: checkError } = await supabase
+        .from('tech_assignments')
+        .select('id, status')
+        .eq('tech_id', techId)
+        .eq('property_id', propertyId)
+        .maybeSingle();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('[Auth] Error checking existing assignment:', checkError);
+        throw checkError;
+      }
+
+      if (existing) {
+        // Assignment exists
+        if (existing.status === 'inactive') {
+          // Reactivate it
+          const { error: updateError } = await supabase
+            .from('tech_assignments')
+            .update({ 
+              status: 'active',
+              assigned_date: new Date().toISOString()
+            })
+            .eq('id', existing.id);
+
+          if (updateError) {
+            console.error('[Auth] Error reactivating assignment:', updateError);
+            throw updateError;
+          }
+          console.log('[Auth] Assignment reactivated');
+        } else {
+          console.log('[Auth] Assignment already active');
+        }
+      } else {
+        // Create new assignment
+        const { error: insertError } = await supabase
+          .from('tech_assignments')
+          .insert({
+            tech_id: techId,
+            property_id: propertyId,
+            status: 'active',
+            assigned_date: new Date().toISOString(),
+          });
+
+        if (insertError) {
+          console.error('[Auth] Error creating assignment:', insertError);
+          throw insertError;
+        }
+        console.log('[Auth] New assignment created');
+      }
+
+      // Refresh user data to get updated assignments
+      await loadCurrentUser();
+      
+      return true;
+    } catch (error) {
+      console.error('[Auth] Failed to assign tech to property:', error);
+      return false;
+    }
+  }, [loadCurrentUser]);
+
+  // Get all techs with their assignments
+  const getAllTechsWithAssignments = useCallback(async (): Promise<User[]> => {
+    try {
+      const { data: techProfiles, error: techError } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, role')
+        .eq('role', 'tech')
+        .order('full_name');
+
+      if (techError) throw techError;
+
+      // Get all active assignments
+      const { data: assignments, error: assignError } = await supabase
+        .from('tech_assignments')
+        .select('tech_id, property_id, status')
+        .eq('status', 'active');
+
+      if (assignError) throw assignError;
+
+      const techsWithAssignments: User[] = (techProfiles || []).map(profile => {
+        const techAssignments = assignments?.filter(a => a.tech_id === profile.id) || [];
+        
+        return {
+          id: profile.id,
+          name: profile.full_name || '',
+          email: profile.email,
+          phone: '',
+          role: 'tech' as UserRole,
+          assignedProperties: techAssignments.map(a => a.property_id),
+        };
+      });
+
+      return techsWithAssignments;
+    } catch (error) {
+      console.error('[Auth] Failed to get techs with assignments:', error);
+      return [];
+    }
+  }, []);
+
   return useMemo(() => ({
     user,
     token,
@@ -514,5 +774,15 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     setDemoMode,
     initialize,
     fetchProfile,
-  }), [user, token, session, profile, isLoading, error, login, signup, logout, resetPassword, clearError, getAllUsers, deleteUser, updateUserRole, setDemoMode, initialize, fetchProfile]);
+    assignTechToProperty,
+    getAllTechsWithAssignments,
+    loadCurrentUser,
+    loadTechs,
+  }), [
+    user, token, session, profile, isLoading, error,
+    login, signup, logout, resetPassword, clearError,
+    getAllUsers, deleteUser, updateUserRole, setDemoMode,
+    initialize, fetchProfile, assignTechToProperty,
+    getAllTechsWithAssignments, loadCurrentUser, loadTechs
+  ]);
 });

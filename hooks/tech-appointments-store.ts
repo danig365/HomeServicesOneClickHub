@@ -1,310 +1,605 @@
-
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { TechAppointment, MaintenanceTask, MediaNote, RoomInspection, AppointmentStatus } from '@/types/tech-appointment';
-import { getMonthlyTasks } from '@/constants/maintenance-tasks';
+import { supabase } from '@/lib/supabase';
+import {
+  PropertyInput,
+  PropertyInsightInput,
+  PropertyReminderInput,
+  LegacyProperty,
+  toLegacyProperty,
+  toDbPropertyInput
+} from '@/types/property';
+import { TechAppointment } from '@/types/tech-appointment';
 
-const STORAGE_KEY = 'hudson_tech_appointments';
+const SELECTED_PROPERTY_KEY = 'selected_property_id';
 
-export const [TechAppointmentsProvider, useTechAppointments] = createContextHook(() => {
-  const [appointments, setAppointments] = useState<TechAppointment[]>([]);
+export const [PropertiesProvider, useProperties] = createContextHook(() => {
+  const [properties, setProperties] = useState<LegacyProperty[]>([]);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  const loadAppointments = useCallback(async () => {
-    try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setAppointments(JSON.parse(stored));
+  // Initialize and get current user
+  useEffect(() => {
+    const initializeUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
       }
+    };
+    initializeUser();
+  }, []);
+
+  // Get assigned techs for a property
+  const getAssignedTechs = useCallback(async (propertyId: string) => {
+    try {
+      // First get tech IDs
+      const { data: assignments, error: assignError } = await supabase
+        .from('tech_assignments')
+        .select('tech_id, assigned_date')
+        .eq('property_id', propertyId)
+        .eq('status', 'active');
+
+      if (assignError) throw assignError;
+      if (!assignments || assignments.length === 0) return [];
+
+      // Then get tech profiles
+      const techIds = assignments.map(a => a.tech_id);
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, role')
+        .in('id', techIds);
+
+      if (profileError) throw profileError;
+
+      // Combine data
+      return (profiles || []).map(profile => {
+        const assignment = assignments.find(a => a.tech_id === profile.id);
+        return {
+          id: profile.id,
+          name: profile.full_name || '',
+          email: profile.email,
+          role: profile.role,
+          assignedDate: assignment?.assigned_date || '',
+        };
+      });
     } catch (error) {
-      console.error('Failed to load appointments:', error);
+      console.error('Failed to get assigned techs:', error);
+      return [];
+    }
+  }, []);
+
+  // Load properties from Supabase - FIXED QUERY
+  const loadProperties = useCallback(async () => {
+    if (!userId) return;
+
+    try {
+      setIsLoading(true);
+      console.log('[Properties] Loading properties for user:', userId);
+
+      // Get user's role first
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+      const userRole = profile?.role;
+      let propertiesData;
+
+      if (userRole === 'tech') {
+        // For techs: Get properties through tech_assignments
+        const { data: techProps, error } = await supabase
+          .from('tech_assignments')
+          .select(`
+            property_id,
+            properties!inner (
+              *,
+              blueprints (*),
+              property_insights (*),
+              property_reminders (*)
+            )
+          `)
+          .eq('tech_id', userId)
+          .eq('status', 'active');
+
+        if (error) throw error;
+        
+        // Extract properties from the joined data
+        propertiesData = techProps?.map(item => item.properties).filter(Boolean) || [];
+      } else if (userRole === 'homeowner') {
+        // For homeowners: Direct property query
+        const { data, error } = await supabase
+          .from('properties')
+          .select(`
+            *,
+            blueprints (*),
+            property_insights (*),
+            property_reminders (*)
+          `)
+          .eq('user_id', userId)
+          .order('is_primary', { ascending: false })
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        propertiesData = data || [];
+      } else {
+        // For admins: Get all properties
+        const { data, error } = await supabase
+          .from('properties')
+          .select(`
+            *,
+            blueprints (*),
+            property_insights (*),
+            property_reminders (*)
+          `)
+          .order('is_primary', { ascending: false })
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        propertiesData = data || [];
+      }
+
+      // Transform to legacy format
+      const legacyProperties = propertiesData.map(prop => {
+        const propInsights = prop.property_insights || [];
+        const propReminders = prop.property_reminders || [];
+        return toLegacyProperty(prop, propInsights, propReminders);
+      });
+
+      setProperties(legacyProperties);
+
+      // Handle property selection
+      const storedSelectedId = await AsyncStorage.getItem(SELECTED_PROPERTY_KEY);
+      if (storedSelectedId && legacyProperties.some(p => p.id === storedSelectedId)) {
+        setSelectedPropertyId(storedSelectedId);
+      } else {
+        const primary = legacyProperties.find(p => p.isPrimary);
+        const selected = primary?.id || legacyProperties[0]?.id || null;
+        setSelectedPropertyId(selected);
+        if (selected) {
+          await AsyncStorage.setItem(SELECTED_PROPERTY_KEY, selected);
+        }
+      }
+
+      console.log('[Properties] Loaded', legacyProperties.length, 'properties for role:', userRole);
+    } catch (error) {
+      console.error('[Properties] Error loading properties:', error);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
-    loadAppointments();
-  }, [loadAppointments]);
+    if (userId) {
+      loadProperties();
+    }
+  }, [userId, loadProperties]);
 
-  const saveAppointments = useCallback(async (newAppointments: TechAppointment[]) => {
+  // Select property
+  const selectProperty = useCallback(async (id: string) => {
+    setSelectedPropertyId(id);
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newAppointments));
-      setAppointments(newAppointments);
+      await AsyncStorage.setItem(SELECTED_PROPERTY_KEY, id);
     } catch (error) {
-      console.error('Failed to save appointments:', error);
+      console.error('Failed to save selected property:', error);
     }
   }, []);
 
-  const createAppointment = useCallback(async (
-    propertyId: string,
-    techId: string,
-    type: 'standard' | 'snapshot',
-    scheduledDate: string,
-    userRequests?: string[]
-  ) => {
-    const month = new Date(scheduledDate).getMonth() + 1;
-    const monthlyTasks = getMonthlyTasks(month);
+  // Add property
+  const addProperty = useCallback(async (property: Omit<LegacyProperty, 'id' | 'insights' | 'reminders'>) => {
+    if (!userId) throw new Error('User not authenticated');
 
-    const tasks: MaintenanceTask[] = monthlyTasks.map((task, index) => ({
-      id: `task-${Date.now()}-${index}`,
-      ...task,
-      completed: false,
-    }));
+    try {
+      const dbInput = toDbPropertyInput(property) as PropertyInput;
 
-    const newAppointment: TechAppointment = {
-      id: `appointment-${Date.now()}`,
-      propertyId,
-      techId,
-      type,
-      status: 'scheduled',
-      scheduledDate,
-      tasks: type === 'standard' ? tasks : [],
-      notes: '',
-      images: [],
-      audioNotes: [],
-      userRequests,
-    };
+      // If this is the first property, set it as primary
+      const { data: existingProps } = await supabase
+        .from('properties')
+        .select('id')
+        .eq('user_id', userId);
 
-    if (type === 'snapshot') {
-      newAppointment.snapshotInspection = {
-        id: `snapshot-${Date.now()}`,
-        propertyId,
-        appointmentId: newAppointment.id,
-        rooms: [],
-        overallScore: 85,
-        structuralScore: 85,
-        mechanicalScore: 85,
-        aestheticScore: 85,
-        efficiencyScore: 85,
-        safetyScore: 85,
-        generalNotes: '',
-        generalImages: [],
-        generalAudioNotes: [],
-        techId,
+      const shouldBePrimary = !existingProps || existingProps.length === 0;
+
+      // Start a Supabase transaction
+      const { data: result, error: transactionError } = await supabase.rpc('create_property_with_blueprint', {
+        property_data: {
+          ...dbInput,
+          user_id: userId,
+          is_primary: shouldBePrimary || dbInput.is_primary,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        subscription_data: {
+          status: 'active',
+          start_date: new Date().toISOString(),
+          next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          monthly_price: 299
+        }
+      });
+
+      if (transactionError) throw transactionError;
+
+      // Load the newly created property
+      const { data: propertyData, error: propertyError } = await supabase
+        .from('properties')
+        .select('*')
+        .eq('id', result.property_id)
+        .single();
+
+      if (propertyError) throw propertyError;
+
+      const newProperty = toLegacyProperty(propertyData, [], []);
+
+      // Update local state
+      setProperties(prev => [...prev, newProperty]);
+
+      // If this is the first property or set as primary, select it
+      if (shouldBePrimary || property.isPrimary) {
+        await selectProperty(newProperty.id);
+      }
+
+      // Trigger a refresh to ensure all related data is loaded
+      await loadProperties();
+
+      return newProperty;
+    } catch (error) {
+      console.error('Failed to add property:', error);
+      throw error;
+    }
+  }, [userId, selectProperty, loadProperties]);
+
+  // Update property
+  const updateProperty = useCallback(async (id: string, updates: Partial<LegacyProperty>) => {
+    if (!userId) throw new Error('User not authenticated');
+
+    try {
+      const dbUpdates = toDbPropertyInput(updates);
+
+      // If setting as primary, unset other primary properties first
+      if (dbUpdates.is_primary) {
+        await supabase
+          .from('properties')
+          .update({ is_primary: false })
+          .eq('user_id', userId)
+          .eq('is_primary', true)
+          .neq('id', id);
+      }
+
+      const { error } = await supabase
+        .from('properties')
+        .update(dbUpdates)
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Reload to get fresh data with insights and reminders
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to update property:', error);
+      throw error;
+    }
+  }, [userId, loadProperties]);
+
+  // Delete property
+  const deleteProperty = useCallback(async (id: string) => {
+    if (!userId) throw new Error('User not authenticated');
+
+    try {
+      const { error } = await supabase
+        .from('properties')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      setProperties(prev => {
+        const updated = prev.filter(p => p.id !== id);
+
+        // If no primary property, set first as primary
+        if (updated.length > 0 && !updated.some(p => p.isPrimary)) {
+          updateProperty(updated[0].id, { isPrimary: true });
+        }
+
+        return updated;
+      });
+
+      // Update selected property if needed
+      if (selectedPropertyId === id) {
+        const remaining = properties.filter(p => p.id !== id);
+        const newSelected = remaining[0]?.id || null;
+        setSelectedPropertyId(newSelected);
+        if (newSelected) {
+          await AsyncStorage.setItem(SELECTED_PROPERTY_KEY, newSelected);
+        } else {
+          await AsyncStorage.removeItem(SELECTED_PROPERTY_KEY);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete property:', error);
+      throw error;
+    }
+  }, [userId, selectedPropertyId, properties, updateProperty]);
+
+  // Get selected property
+  const getSelectedProperty = useCallback(() => {
+    return properties.find(p => p.id === selectedPropertyId) || properties[0] || null;
+  }, [properties, selectedPropertyId]);
+
+  // Get primary property
+  const getPrimaryProperty = useCallback(() => {
+    return properties.find(p => p.isPrimary) || properties[0] || null;
+  }, [properties]);
+
+  // Add insight
+  const addInsight = useCallback(async (propertyId: string, insight: Omit<PropertyInsightInput, 'property_id'>) => {
+    if (!userId) throw new Error('User not authenticated');
+
+    try {
+      const { error } = await supabase
+        .from('property_insights')
+        .insert([{ ...insight, property_id: propertyId }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Reload properties to update insights
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to add insight:', error);
+      throw error;
+    }
+  }, [userId, loadProperties]);
+
+  // Update insight
+  const updateInsight = useCallback(async (propertyId: string, insightId: string, updates: Partial<PropertyInsightInput>) => {
+    if (!userId) throw new Error('User not authenticated');
+
+    try {
+      const { error } = await supabase
+        .from('property_insights')
+        .update(updates)
+        .eq('id', insightId)
+        .eq('property_id', propertyId);
+
+      if (error) throw error;
+
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to update insight:', error);
+      throw error;
+    }
+  }, [userId, loadProperties]);
+
+  // Delete insight
+  const deleteInsight = useCallback(async (propertyId: string, insightId: string) => {
+    if (!userId) throw new Error('User not authenticated');
+
+    try {
+      const { error } = await supabase
+        .from('property_insights')
+        .delete()
+        .eq('id', insightId)
+        .eq('property_id', propertyId);
+
+      if (error) throw error;
+
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to delete insight:', error);
+      throw error;
+    }
+  }, [userId, loadProperties]);
+
+  // Add reminder
+  const addReminder = useCallback(async (propertyId: string, reminder: PropertyReminderInput) => {
+    if (!userId) throw new Error('User not authenticated');
+
+    try {
+      const { error } = await supabase
+        .from('property_reminders')
+        .insert([{ ...reminder, property_id: propertyId }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to add reminder:', error);
+      throw error;
+    }
+  }, [userId, loadProperties]);
+
+  // Update reminder
+  const updateReminder = useCallback(async (propertyId: string, reminderId: string, updates: Partial<PropertyReminderInput>) => {
+    if (!userId) throw new Error('User not authenticated');
+
+    try {
+      const { error } = await supabase
+        .from('property_reminders')
+        .update(updates)
+        .eq('id', reminderId)
+        .eq('property_id', propertyId);
+
+      if (error) throw error;
+
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to update reminder:', error);
+      throw error;
+    }
+  }, [userId, loadProperties]);
+
+  // Delete reminder
+  const deleteReminder = useCallback(async (propertyId: string, reminderId: string) => {
+    if (!userId) throw new Error('User not authenticated');
+
+    try {
+      const { error } = await supabase
+        .from('property_reminders')
+        .delete()
+        .eq('id', reminderId)
+        .eq('property_id', propertyId);
+
+      if (error) throw error;
+
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to delete reminder:', error);
+      throw error;
+    }
+  }, [userId, loadProperties]);
+
+  // Complete reminder
+  const completeReminder = useCallback(async (propertyId: string, reminderId: string) => {
+    if (!userId) throw new Error('User not authenticated');
+
+    try {
+      const property = properties.find(p => p.id === propertyId);
+      if (!property || !property.reminders) return;
+
+      const reminder = property.reminders.find(r => r.id === reminderId);
+      if (!reminder) return;
+
+      const updates: Partial<PropertyReminderInput & { completed: boolean; completed_date: string }> = {
+        completed: true,
+        completed_date: new Date().toISOString(),
       };
-      console.log('Created snapshot inspection:', newAppointment.snapshotInspection);
+
+      const { error } = await supabase
+        .from('property_reminders')
+        .update(updates)
+        .eq('id', reminderId)
+        .eq('property_id', propertyId);
+
+      if (error) throw error;
+
+      // If recurring, create a new reminder
+      if (reminder.recurring && reminder.recurringInterval) {
+        const nextDueDate = new Date(reminder.dueDate);
+        nextDueDate.setDate(nextDueDate.getDate() + reminder.recurringInterval);
+
+        await addReminder(propertyId, {
+          title: reminder.title,
+          description: reminder.description,
+          due_date: nextDueDate.toISOString(),
+          type: reminder.type,
+          priority: reminder.priority,
+          recurring: reminder.recurring,
+          recurring_interval: reminder.recurringInterval,
+          created_by: reminder.createdBy,
+          created_by_role: reminder.createdByRole,
+        });
+      }
+
+      await loadProperties();
+    } catch (error) {
+      console.error('Failed to complete reminder:', error);
+      throw error;
     }
+  }, [userId, properties, loadProperties, addReminder]);
 
-    await saveAppointments([...appointments, newAppointment]);
-    return newAppointment;
-  }, [appointments, saveAppointments]);
+  // Get upcoming reminders
+  const getUpcomingReminders = useCallback((propertyId: string, days: number = 30) => {
+    const property = properties.find(p => p.id === propertyId);
+    if (!property || !property.reminders) return [];
 
-  const updateAppointment = useCallback(async (id: string, updates: Partial<TechAppointment>) => {
-    const updatedAppointments = appointments.map(apt =>
-      apt.id === id ? { ...apt, ...updates } : apt
-    );
-    await saveAppointments(updatedAppointments);
-  }, [appointments, saveAppointments]);
+    const now = new Date();
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + days);
 
-  const updateAppointmentStatus = useCallback(async (id: string, status: AppointmentStatus) => {
-    const updates: Partial<TechAppointment> = { status };
-    
-    if (status === 'in-progress' && !appointments.find(a => a.id === id)?.startedAt) {
-      updates.startedAt = new Date().toISOString();
-    }
-    
-    if (status === 'completed') {
-      updates.completedAt = new Date().toISOString();
-    }
+    return property.reminders
+      .filter(r => !r.completed && new Date(r.dueDate) <= futureDate && new Date(r.dueDate) >= now)
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  }, [properties]);
 
-    await updateAppointment(id, updates);
-  }, [appointments, updateAppointment]);
+  // Get overdue reminders
+  const getOverdueReminders = useCallback((propertyId: string) => {
+    const property = properties.find(p => p.id === propertyId);
+    if (!property || !property.reminders) return [];
 
-  const completeTask = useCallback(async (appointmentId: string, taskId: string, notes?: string, images?: MediaNote[], audioNotes?: MediaNote[]) => {
-    const appointment = appointments.find(a => a.id === appointmentId);
-    if (!appointment) return;
+    const now = new Date();
+    return property.reminders
+      .filter(r => !r.completed && new Date(r.dueDate) < now)
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  }, [properties]);
 
-    const updatedTasks = appointment.tasks.map(task =>
-      task.id === taskId
-        ? {
-            ...task,
-            completed: true,
-            completedAt: new Date().toISOString(),
-            notes: notes || task.notes,
-            images: images || task.images,
-            audioNotes: audioNotes || task.audioNotes,
-          }
-        : task
-    );
+  return useMemo(() => ({
+    properties,
+    selectedPropertyId,
+    isLoading,
+    addProperty,
+    updateProperty,
+    deleteProperty,
+    selectProperty,
+    getSelectedProperty,
+    getPrimaryProperty,
+    addInsight,
+    updateInsight,
+    deleteInsight,
+    addReminder,
+    updateReminder,
+    deleteReminder,
+    completeReminder,
+    getUpcomingReminders,
+    getOverdueReminders,
+    refreshProperties: loadProperties,
+    getAssignedTechs,
+  }), [
+    properties,
+    selectedPropertyId,
+    isLoading,
+    addProperty,
+    updateProperty,
+    deleteProperty,
+    selectProperty,
+    getSelectedProperty,
+    getPrimaryProperty,
+    addInsight,
+    updateInsight,
+    deleteInsight,
+    addReminder,
+    updateReminder,
+    deleteReminder,
+    completeReminder,
+    getUpcomingReminders,
+    getOverdueReminders,
+    loadProperties,
+    getAssignedTechs,
+  ]);
+});
 
-    await updateAppointment(appointmentId, { tasks: updatedTasks });
-  }, [appointments, updateAppointment]);
-
-  const addMediaNote = useCallback(async (
-    appointmentId: string,
-    type: 'image' | 'audio',
-    uri: string,
-    notes?: string,
-    location?: string
-  ) => {
-    const appointment = appointments.find(a => a.id === appointmentId);
-    if (!appointment) return;
-
-    const mediaNote: MediaNote = {
-      id: `media-${Date.now()}`,
-      type,
-      uri,
-      timestamp: new Date().toISOString(),
-      notes,
-      location,
-    };
-
-    const updates: Partial<TechAppointment> = {};
-    if (type === 'image') {
-      updates.images = [...appointment.images, mediaNote];
-    } else {
-      updates.audioNotes = [...appointment.audioNotes, mediaNote];
-    }
-
-    await updateAppointment(appointmentId, updates);
-  }, [appointments, updateAppointment]);
-
-  const addRoomInspection = useCallback(async (appointmentId: string, room: Omit<RoomInspection, 'id'>) => {
-    const appointment = appointments.find(a => a.id === appointmentId);
-    if (!appointment?.snapshotInspection) return;
-
-    const newRoom: RoomInspection = {
-      ...room,
-      id: `room-${Date.now()}`,
-    };
-
-    const updatedRooms = [...appointment.snapshotInspection.rooms, newRoom];
-    const avgScore = updatedRooms.reduce((sum, r) => sum + r.score, 0) / updatedRooms.length;
-
-    await updateAppointment(appointmentId, {
-      snapshotInspection: {
-        ...appointment.snapshotInspection,
-        rooms: updatedRooms,
-        overallScore: Math.round(avgScore),
-      },
-    });
-  }, [appointments, updateAppointment]);
-
-  const updateRoomInspection = useCallback(async (appointmentId: string, roomId: string, updates: Partial<RoomInspection>) => {
-    const appointment = appointments.find(a => a.id === appointmentId);
-    if (!appointment?.snapshotInspection) return;
-
-    const updatedRooms = appointment.snapshotInspection.rooms.map(room =>
-      room.id === roomId ? { ...room, ...updates } : room
-    );
-
-    const avgScore = updatedRooms.reduce((sum, r) => sum + r.score, 0) / updatedRooms.length;
-
-    await updateAppointment(appointmentId, {
-      snapshotInspection: {
-        ...appointment.snapshotInspection,
-        rooms: updatedRooms,
-        overallScore: Math.round(avgScore),
-      },
-    });
-  }, [appointments, updateAppointment]);
-
-  const updateSnapshotScores = useCallback(async (
-    appointmentId: string,
-    scores: {
-      structuralScore: number;
-      mechanicalScore: number;
-      aestheticScore: number;
-      efficiencyScore: number;
-      safetyScore: number;
-    }
-  ) => {
-    const appointment = appointments.find(a => a.id === appointmentId);
-    if (!appointment?.snapshotInspection) return;
-
-    const overallScore = Math.round(
-      (scores.structuralScore + scores.mechanicalScore + scores.aestheticScore + scores.efficiencyScore + scores.safetyScore) / 5
-    );
-
-    await updateAppointment(appointmentId, {
-      snapshotInspection: {
-        ...appointment.snapshotInspection,
-        ...scores,
-        overallScore,
-      },
-    });
-  }, [appointments, updateAppointment]);
-
-  const completeSnapshot = useCallback(async (appointmentId: string) => {
-    const appointment = appointments.find(a => a.id === appointmentId);
-    if (!appointment?.snapshotInspection) return;
-
-    await updateAppointment(appointmentId, {
-      snapshotInspection: {
-        ...appointment.snapshotInspection,
-        completedAt: new Date().toISOString(),
-      },
-      status: 'completed',
-      completedAt: new Date().toISOString(),
-    });
-  }, [appointments, updateAppointment]);
-
-  const getAppointmentsByProperty = useCallback((propertyId: string) => {
-    return appointments.filter(apt => apt.propertyId === propertyId);
-  }, [appointments]);
-
-  const getAppointmentsByTech = useCallback((techId: string) => {
-    return appointments.filter(apt => apt.techId === techId);
-  }, [appointments]);
+export const [TechAppointmentsProvider, useTechAppointments] = createContextHook(() => {
+  const [appointments, setAppointments] = useState<TechAppointment[]>([]);
 
   const getUpcomingAppointments = useCallback((techId?: string) => {
-    const now = new Date();
-    let filtered = appointments.filter(apt => 
-      apt.status === 'scheduled' && new Date(apt.scheduledDate) >= now
-    );
-    
-    if (techId) {
-      filtered = filtered.filter(apt => apt.techId === techId);
-    }
-
-    return filtered.sort((a, b) => 
-      new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()
+    return appointments.filter(apt => 
+      apt.status === 'upcoming' && (!techId || apt.techId === techId)
     );
   }, [appointments]);
 
   const getInProgressAppointments = useCallback((techId?: string) => {
-    let filtered = appointments.filter(apt => apt.status === 'in-progress');
-    
-    if (techId) {
-      filtered = filtered.filter(apt => apt.techId === techId);
-    }
-
-    return filtered;
+    return appointments.filter(apt => 
+      apt.status === 'in-progress' && (!techId || apt.techId === techId)
+    );
   }, [appointments]);
 
-  return useMemo(() => ({
+  // Add this function
+  const getAppointmentsByProperty = useCallback((propertyId: string) => {
+    return appointments.filter(apt => apt.propertyId === propertyId);
+  }, [appointments]);
+
+  return {
     appointments,
-    isLoading,
-    createAppointment,
-    updateAppointment,
-    updateAppointmentStatus,
-    completeTask,
-    addMediaNote,
-    addRoomInspection,
-    updateRoomInspection,
-    updateSnapshotScores,
-    completeSnapshot,
-    getAppointmentsByProperty,
-    getAppointmentsByTech,
     getUpcomingAppointments,
     getInProgressAppointments,
-  }), [
-    appointments,
-    isLoading,
-    createAppointment,
-    updateAppointment,
-    updateAppointmentStatus,
-    completeTask,
-    addMediaNote,
-    addRoomInspection,
-    updateRoomInspection,
-    updateSnapshotScores,
-    completeSnapshot,
-    getAppointmentsByProperty,
-    getAppointmentsByTech,
-    getUpcomingAppointments,
-    getInProgressAppointments,
-  ]);
+    getAppointmentsByProperty, // Add to return object
+  };
 });

@@ -33,7 +33,62 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
       loadAppointments();
     }
   }, [userId]);
+  const canAccessAppointment = useCallback(async (appointmentId: string): Promise<boolean> => {
+    if (!userId) return false;
 
+    try {
+      // Get user role
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+      const userRole = profile?.role;
+
+      // Admins can access all
+      if (userRole === 'admin') return true;
+
+      // Get appointment property
+      const { data: visit } = await supabase
+        .from('hudson_visits')
+        .select('property_id')
+        .eq('id', appointmentId)
+        .single();
+
+      if (!visit) return false;
+
+      if (userRole === 'tech') {
+        // Check if tech is assigned to property
+        const { data: assignment } = await supabase
+          .from('tech_assignments')
+          .select('id')
+          .eq('tech_id', userId)
+          .eq('property_id', visit.property_id)
+          .eq('status', 'active')
+          .single();
+
+        return !!assignment;
+      }
+
+      if (userRole === 'homeowner') {
+        // Check if property belongs to homeowner
+        const { data: property } = await supabase
+          .from('properties')
+          .select('id')
+          .eq('id', visit.property_id)
+          .eq('user_id', userId)
+          .single();
+
+        return !!property;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error checking appointment access:', error);
+      return false;
+    }
+  }, [userId]);
   // Load all appointments for the homeowner's properties
   const loadAppointments = useCallback(async () => {
     if (!userId) {
@@ -46,34 +101,81 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
       setIsLoading(true);
       console.log('Loading appointments for user:', userId);
 
-      // First, get all properties for this user
-      const { data: properties, error: propError } = await supabase
-        .from('properties')
-        .select('id, name, address, city, state')
-        .eq('user_id', userId);
+      // Get user role
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
 
-      if (propError) {
-        console.error('Error fetching properties:', propError);
-        throw propError;
+      const userRole = profile?.role;
+
+      // Get properties based on role
+      let propertyIds: string[] = [];
+
+      if (userRole === 'tech') {
+        // For techs, get assigned properties
+        const { data: assignments, error: assignError } = await supabase
+          .from('tech_assignments')
+          .select('property_id')
+          .eq('tech_id', userId)
+          .eq('status', 'active');
+
+        if (assignError) {
+          console.error('Error fetching tech assignments:', assignError);
+          throw assignError;
+        }
+
+        propertyIds = assignments?.map(a => a.property_id) || [];
+
+        if (propertyIds.length === 0) {
+          console.log('No properties assigned to tech');
+          setAppointments([]);
+          setIsLoading(false);
+          return;
+        }
+      } else if (userRole === 'homeowner') {
+        // For homeowners, get their own properties
+        const { data: properties, error: propError } = await supabase
+          .from('properties')
+          .select('id')
+          .eq('user_id', userId);
+
+        if (propError) {
+          console.error('Error fetching properties:', propError);
+          throw propError;
+        }
+
+        propertyIds = properties?.map(p => p.id) || [];
+
+        if (propertyIds.length === 0) {
+          console.log('No properties found for homeowner');
+          setAppointments([]);
+          setIsLoading(false);
+          return;
+        }
+      } else if (userRole === 'admin') {
+        // Admins can see all appointments - get all property IDs
+        const { data: properties, error: propError } = await supabase
+          .from('properties')
+          .select('id');
+
+        if (propError) {
+          console.error('Error fetching properties:', propError);
+          throw propError;
+        }
+
+        propertyIds = properties?.map(p => p.id) || [];
       }
 
-      console.log('Found properties:', properties?.length || 0);
-
-      if (!properties || properties.length === 0) {
-        console.log('No properties found for user');
-        setAppointments([]);
-        setIsLoading(false); // FIX: Set loading to false
-        return;
-      }
-
-      const propertyIds = properties.map(p => p.id);
+      console.log('Found property IDs:', propertyIds.length, 'for role:', userRole);
 
       // Get all hudson visits (appointments) for these properties
       const { data: visitsData, error: visitsError } = await supabase
         .from('hudson_visits')
         .select('*')
         .in('property_id', propertyIds)
-        .order('scheduled_date', { ascending: true }); // FIX: Changed to ascending for upcoming first
+        .order('scheduled_date', { ascending: true });
 
       if (visitsError) {
         console.error('Error fetching visits:', visitsError);
@@ -81,13 +183,22 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
       }
 
       console.log('Found visits:', visitsData?.length || 0);
-      console.log('Visits data:', JSON.stringify(visitsData, null, 2)); // ADDED: Debug log
 
       if (!visitsData || visitsData.length === 0) {
         console.log('No visits found for properties');
         setAppointments([]);
         setIsLoading(false);
         return;
+      }
+
+      // Get property details for these visits
+      const { data: properties, error: propDetailsError } = await supabase
+        .from('properties')
+        .select('id, name, address, city, state')
+        .in('id', propertyIds);
+
+      if (propDetailsError) {
+        console.error('Error fetching property details:', propDetailsError);
       }
 
       // Get all maintenance tasks for these visits
@@ -97,11 +208,11 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
         .select('*')
         .in('visit_id', visitIds);
 
-      console.log('Found tasks:', tasksData?.length || 0); // ADDED: Debug log
+      console.log('Found tasks:', tasksData?.length || 0);
 
       // Combine data
       const appointmentsWithDetails: Appointment[] = visitsData.map(visit => {
-        const property = properties.find(p => p.id === visit.property_id);
+        const property = properties?.find(p => p.id === visit.property_id);
         const visitTasks = tasksData?.filter(t => t.visit_id === visit.id) || [];
 
         return toAppointment(
@@ -112,13 +223,11 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
         );
       });
 
-      console.log('Processed appointments:', appointmentsWithDetails.length); // ADDED: Debug log
-      console.log('Appointments details:', JSON.stringify(appointmentsWithDetails, null, 2)); // ADDED: Debug log
-
+      console.log('Processed appointments:', appointmentsWithDetails.length);
       setAppointments(appointmentsWithDetails);
     } catch (error) {
       console.error('Failed to load appointments:', error);
-      setAppointments([]); // ADDED: Clear appointments on error
+      setAppointments([]);
     } finally {
       setIsLoading(false);
     }
@@ -264,6 +373,7 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
     getUpcomingAppointments,
     getPastAppointments,
     getAppointmentsByProperty,
+    canAccessAppointment, // Add this if you created it
   }), [
     appointments,
     isLoading,
@@ -274,5 +384,6 @@ export const [AppointmentsProvider, useAppointments] = createContextHook(() => {
     getUpcomingAppointments,
     getPastAppointments,
     getAppointmentsByProperty,
+    canAccessAppointment, // Add this if you created it
   ]);
 });

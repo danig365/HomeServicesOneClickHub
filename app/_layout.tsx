@@ -129,6 +129,7 @@ function RootLayoutNav() {
         name="tech-portal"
         options={{
           title: "Tech Portal",
+          headerRight: () => <AdminHeaderRight />,
         }}
       />
       <Stack.Screen
@@ -223,35 +224,37 @@ export default function RootLayout() {
     <trpc.Provider client={trpcReactClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView style={{ flex: 1 }}>
-          <AuthProvider>
-            <UserProvider>
-              <PropertiesProvider>
-                <SubscriptionProvider>
-                  <ServicesProvider>
+          <View style={{ flex: 1 }}>
+            <AuthProvider>
+              <UserProvider>
+                <PropertiesProvider>
+                  <SubscriptionProvider>
+                    <ServicesProvider>
+                      {/* ✅ ADD THIS */}
+                      <TechAssignmentsProvider>
+                        <UserRequestsProvider>
+                          <TechAppointmentsProvider>
+                            <SnapshotProvider>
+                              <CartProvider>
+                                <BookingsProvider>
+                                  <AppointmentsProvider>
+                                    <VaultProvider>
+                                      <RootLayoutNav />
+                                    </VaultProvider>
+                                  </AppointmentsProvider>
+                                </BookingsProvider>
+                              </CartProvider>
+                            </SnapshotProvider>
+                          </TechAppointmentsProvider>
+                        </UserRequestsProvider>
+                      </TechAssignmentsProvider>
+                    </ServicesProvider>{" "}
                     {/* ✅ ADD THIS */}
-                    <TechAssignmentsProvider>
-                      <UserRequestsProvider>
-                        <TechAppointmentsProvider>
-                          <SnapshotProvider>
-                            <CartProvider>
-                              <BookingsProvider>
-                                <AppointmentsProvider>
-                                  <VaultProvider>
-                                    <RootLayoutNav />
-                                  </VaultProvider>
-                                </AppointmentsProvider>
-                              </BookingsProvider>
-                            </CartProvider>
-                          </SnapshotProvider>
-                        </TechAppointmentsProvider>
-                      </UserRequestsProvider>
-                    </TechAssignmentsProvider>
-                  </ServicesProvider>{" "}
-                  {/* ✅ ADD THIS */}
-                </SubscriptionProvider>
-              </PropertiesProvider>
-            </UserProvider>
-          </AuthProvider>
+                  </SubscriptionProvider>
+                </PropertiesProvider>
+              </UserProvider>
+            </AuthProvider>
+          </View>
         </GestureHandlerRootView>
       </QueryClientProvider>
     </trpc.Provider>

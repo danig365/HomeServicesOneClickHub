@@ -5,17 +5,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Icons from 'lucide-react-native';
 import { useProperties } from '@/hooks/properties-store';
 import { useTechAppointments } from '@/hooks/tech-appointments-store';
-import { useSnapshots } from '@/hooks/snapshot-store';
-import { useUser } from '@/hooks/user-store';
 import { COLORS } from '@/constants/colors';
-import { Property } from '@/types/property';
+import { useAuth } from '@/hooks/auth-store';
+import { TechAppointment } from '@/types/tech-appointment';
 
 export default function TechPortalScreen() {
   const insets = useSafeAreaInsets();
   const { properties } = useProperties();
   const { appointments, getUpcomingAppointments, getInProgressAppointments } = useTechAppointments();
-  const { } = useSnapshots();
-  const { currentUser } = useUser();
+  const { user: currentUser } = useAuth();
   
   const [dashboardStats, setDashboardStats] = useState({
     totalAppointments: 0,
@@ -36,7 +34,7 @@ export default function TechPortalScreen() {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const completedToday = appointments.filter(apt => {
+    const completedToday = appointments.filter((apt: TechAppointment) => {
       if (apt.status !== 'completed' || !apt.completedAt) return false;
       const completedDate = new Date(apt.completedAt);
       return completedDate >= today && completedDate < tomorrow;
@@ -50,7 +48,7 @@ export default function TechPortalScreen() {
     });
   }, [appointments, inProgressAppointments.length, upcomingAppointments.length]);
 
-  const handleQuickStartSnapshot = async (property: Property) => {
+  const handleQuickStartSnapshot = async (property: any) => {
     const techId = isTech ? currentUser?.id : undefined;
     if (!techId) {
       Alert.alert('Error', 'No tech available');
@@ -173,7 +171,7 @@ export default function TechPortalScreen() {
               <Text style={styles.emptySubtext}>Start working on scheduled appointments</Text>
             </View>
           ) : (
-            inProgressAppointments.map((apt) => {
+            inProgressAppointments.map((apt: TechAppointment) => {
               const property = properties.find(p => p.id === apt.propertyId);
               if (!property) return null;
 
@@ -222,7 +220,7 @@ export default function TechPortalScreen() {
               <Text style={styles.emptySubtext}>Schedule new appointments from properties</Text>
             </View>
           ) : (
-            upcomingAppointments.map((apt) => {
+            upcomingAppointments.map((apt: TechAppointment) => {
               const property = properties.find(p => p.id === apt.propertyId);
               if (!property) return null;
 
